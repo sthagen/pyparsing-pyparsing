@@ -29,6 +29,15 @@ class PyparsingExpressionTestCase(unittest.TestCase):
     given text strings. Subclasses must define a class attribute 'tests' which
     is a list of PpTestSpec instances.
     """
+    
+    if not hasattr(unittest.TestCase, 'subTest'):
+        # Python 2 compatibility
+        from contextlib import contextmanager
+        @contextmanager
+        def subTest(self, **params):
+            print('subTest:', params)
+            yield
+    
     tests = []
     def runTest(self):
         if self.__class__ is PyparsingExpressionTestCase:
@@ -44,9 +53,9 @@ class PyparsingExpressionTestCase(unittest.TestCase):
             #    the location against an expected value
             with self.subTest(test_spec=test_spec):
                 test_spec.expr.streamline()
-                print("\n{} - {}({})".format(test_spec.desc,
-                                             type(test_spec.expr).__name__,
-                                             test_spec.expr))
+                print("\n{0} - {1}({2})".format(test_spec.desc,
+                                                type(test_spec.expr).__name__,
+                                                test_spec.expr))
 
                 parsefn = getattr(test_spec.expr, test_spec.parse_fn)
                 if test_spec.expected_fail_locn is None:
@@ -69,19 +78,23 @@ class PyparsingExpressionTestCase(unittest.TestCase):
                         # compare results against given list and/or dict
                         if test_spec.expected_list is not None:
                             self.assertEqual([result], test_spec.expected_list)
-
                 else:
                     # expect fail
                     try:
                         parsefn(test_spec.text)
                     except Exception as exc:
+                        if not hasattr(exc, '__traceback__'):
+                            # Python 2 compatibility
+                            from sys import exc_info
+                            etype, value, traceback = exc_info()
+                            exc.__traceback__ = traceback
                         print(pp.ParseException.explain(exc))
                         self.assertEqual(exc.loc, test_spec.expected_fail_locn)
                     else:
                         self.assertTrue(False, "failed to raise expected exception")
 
 
-#=========== TEST DEFINITIONS START HERE ==============
+# =========== TEST DEFINITIONS START HERE ==============
 
 class TestLiteral(PyparsingExpressionTestCase):
     tests = [
@@ -127,7 +140,9 @@ class TestCaselessLiteral(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc = "Match colors, converting to consistent case",
-            expr = pp.OneOrMore(pp.CaselessLiteral("RED") | pp.CaselessLiteral("GREEN") | pp.CaselessLiteral("BLUE")),
+            expr = (pp.CaselessLiteral("RED")
+                    | pp.CaselessLiteral("GREEN")
+                    | pp.CaselessLiteral("BLUE"))[...],
             text = "red Green BluE blue GREEN green rEd",
             expected_list = ['RED', 'GREEN', 'BLUE', 'BLUE', 'GREEN', 'GREEN', 'RED'],
         ),
@@ -159,13 +174,13 @@ class TestCombine(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc="Parsing real numbers - fail, parsed numbers are in pieces",
-            expr=pp.OneOrMore(pp.Word(pp.nums) + '.' + pp.Word(pp.nums)),
+            expr=(pp.Word(pp.nums) + '.' + pp.Word(pp.nums))[...],
             text="1.2 2.3 3.1416 98.6",
             expected_list=['1', '.', '2', '2', '.', '3', '3', '.', '1416', '98', '.', '6'],
         ),
         PpTestSpec(
             desc="Parsing real numbers - better, use Combine to combine multiple tokens into one",
-            expr=pp.OneOrMore(pp.Combine(pp.Word(pp.nums) + '.' + pp.Word(pp.nums))),
+            expr=pp.Combine(pp.Word(pp.nums) + '.' + pp.Word(pp.nums))[...],
             text="1.2 2.3 3.1416 98.6",
             expected_list=['1.2', '2.3', '3.1416', '98.6'],
         ),
@@ -175,19 +190,26 @@ class TestRepetition(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc = "Match several words",
-            expr = pp.OneOrMore(pp.Word("x") | pp.Word("y")),
+            expr = (pp.Word("x") | pp.Word("y"))[...],
             text = "xxyxxyyxxyxyxxxy",
             expected_list = ['xx', 'y', 'xx', 'yy', 'xx', 'y', 'x', 'y', 'xxx', 'y'],
         ),
         PpTestSpec(
             desc = "Match several words, skipping whitespace",
+            expr = (pp.Word("x") | pp.Word("y"))[...],
+            text = "x x  y xxy yxx y xyx  xxy",
+            expected_list = ['x', 'x', 'y', 'xx', 'y', 'y', 'xx', 'y', 'x', 'y', 'x', 'xx', 'y'],
+        ),
+        PpTestSpec(
+            desc = "Match several words, skipping whitespace (old style)",
             expr = pp.OneOrMore(pp.Word("x") | pp.Word("y")),
             text = "x x  y xxy yxx y xyx  xxy",
             expected_list = ['x', 'x', 'y', 'xx', 'y', 'y', 'xx', 'y', 'x', 'y', 'x', 'xx', 'y'],
         ),
         PpTestSpec(
             desc = "Match words and numbers - show use of results names to collect types of tokens",
-            expr = pp.OneOrMore(pp.Word(pp.alphas)("alpha*") | pp.pyparsing_common.integer("int*")),
+            expr = (pp.Word(pp.alphas)("alpha*")
+                    | pp.pyparsing_common.integer("int*"))[...],
             text = "sdlfj23084ksdfs08234kjsdlfkjd0934",
             expected_list = ['sdlfj', 23084, 'ksdfs', 8234, 'kjsdlfkjd', 934],
             expected_dict = { 'alpha': ['sdlfj', 'ksdfs', 'kjsdlfkjd'], 'int': [23084, 8234, 934] }
@@ -236,27 +258,28 @@ class TestGroups(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc = "Define multiple results names in groups",
-            expr = pp.OneOrMore(pp.Group(pp.Word(pp.alphas)("key")
-                                          + EQ
-                                          + pp.pyparsing_common.number("value"))),
+            expr = pp.Group(pp.Word(pp.alphas)("key")
+                            + EQ
+                            + pp.pyparsing_common.number("value"))[...],
             text = "range=5280 long=-138.52 lat=46.91",
             expected_list = [['range', 5280], ['long', -138.52], ['lat', 46.91]],
         ),
         PpTestSpec(
             desc = "Define multiple results names in groups - use Dict to define results names using parsed keys",
-            expr = pp.Dict(pp.OneOrMore(pp.Group(pp.Word(pp.alphas)
-                                          + EQ
-                                          + pp.pyparsing_common.number))),
+            expr = pp.Dict(pp.Group(pp.Word(pp.alphas)
+                                    + EQ
+                                    + pp.pyparsing_common.number)[...]),
             text = "range=5280 long=-138.52 lat=46.91",
             expected_list = [['range', 5280], ['long', -138.52], ['lat', 46.91]],
             expected_dict = {'lat': 46.91, 'long': -138.52, 'range': 5280}
         ),
         PpTestSpec(
             desc = "Define multiple value types",
-            expr = pp.Dict(pp.OneOrMore(pp.Group(pp.Word(pp.alphas)
+            expr = pp.Dict(pp.Group(pp.Word(pp.alphas)
                                           + EQ
                                           + (pp.pyparsing_common.number | pp.oneOf("True False") | pp.QuotedString("'"))
-                                        ))),
+                                        )[...]
+                           ),
             text = "long=-122.47 lat=37.82 public=True name='Golden Gate Bridge'",
             expected_list = [['long', -122.47], ['lat', 37.82], ['public', 'True'], ['name', 'Golden Gate Bridge']],
             expected_dict = {'long': -122.47, 'lat': 37.82, 'public': 'True', 'name': 'Golden Gate Bridge'}
@@ -267,7 +290,7 @@ class TestParseAction(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc="Parsing real numbers - use parse action to convert to float at parse time",
-            expr=pp.OneOrMore(pp.Combine(pp.Word(pp.nums) + '.' + pp.Word(pp.nums)).addParseAction(lambda t: float(t[0]))),
+            expr=pp.Combine(pp.Word(pp.nums) + '.' + pp.Word(pp.nums)).addParseAction(lambda t: float(t[0]))[...],
             text="1.2 2.3 3.1416 98.6",
             expected_list= [1.2, 2.3, 3.1416, 98.6], # note, these are now floats, not strs
         ),
@@ -293,13 +316,13 @@ class TestParseAction(PyparsingExpressionTestCase):
         ),
         PpTestSpec(
             desc = "Using a built-in function that takes a sequence of strs as a parse action",
-            expr = pp.OneOrMore(pp.Word(pp.hexnums, exact=2)).addParseAction(':'.join),
+            expr = pp.Word(pp.hexnums, exact=2)[...].addParseAction(':'.join),
             text = "0A4B7321FE76",
             expected_list = ['0A:4B:73:21:FE:76'],
         ),
         PpTestSpec(
             desc = "Using a built-in function that takes a sequence of strs as a parse action",
-            expr = pp.OneOrMore(pp.Word(pp.hexnums, exact=2)).addParseAction(sorted),
+            expr = pp.Word(pp.hexnums, exact=2)[...].addParseAction(sorted),
             text = "0A4B7321FE76",
             expected_list = ['0A', '21', '4B', '73', '76', 'FE'],
         ),
@@ -318,7 +341,7 @@ class TestResultsModifyingParseAction(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc = "A parse action that adds new key-values",
-            expr = pp.OneOrMore(pp.pyparsing_common.integer).addParseAction(compute_stats_parse_action),
+            expr = pp.pyparsing_common.integer[...].addParseAction(compute_stats_parse_action),
             text = "27 1 14 22 89",
             expected_list = [27, 1, 14, 22, 89],
             expected_dict = {'ave': 30.6, 'max': 89, 'min': 1, 'sum': 153}
@@ -329,7 +352,7 @@ class TestRegex(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc="Parsing real numbers - using Regex instead of Combine",
-            expr=pp.OneOrMore(pp.Regex(r'\d+\.\d+').addParseAction(lambda t: float(t[0]))),
+            expr=pp.Regex(r'\d+\.\d+').addParseAction(lambda t: float(t[0]))[...],
             text="1.2 2.3 3.1416 98.6",
             expected_list=[1.2, 2.3, 3.1416, 98.6],  # note, these are now floats, not strs
         ),
@@ -339,14 +362,14 @@ class TestParseCondition(PyparsingExpressionTestCase):
     tests = [
         PpTestSpec(
             desc = "Define a condition to only match numeric values that are multiples of 7",
-            expr = pp.OneOrMore(pp.Word(pp.nums).addCondition(lambda t: int(t[0]) % 7 == 0)),
+            expr = pp.Word(pp.nums).addCondition(lambda t: int(t[0]) % 7 == 0)[...],
             text = "14 35 77 12 28",
             expected_list = ['14', '35', '77'],
         ),
         PpTestSpec(
             desc = "Separate conversion to int and condition into separate parse action/conditions",
-            expr = pp.OneOrMore(pp.Word(pp.nums).addParseAction(lambda t: int(t[0]))
-                                                 .addCondition(lambda t: t[0] % 7 == 0)),
+            expr = pp.Word(pp.nums).addParseAction(lambda t: int(t[0]))
+                                   .addCondition(lambda t: t[0] % 7 == 0)[...],
             text = "14 35 77 12 28",
             expected_list = [14, 35, 77],
         ),
@@ -360,7 +383,7 @@ class TestTransformStringUsingParseActions(PyparsingExpressionTestCase):
     }
     def markup_convert(t):
         htmltag = TestTransformStringUsingParseActions.markup_convert_map[t.markup_symbol]
-        return "<{}>{}</{}>".format(htmltag, t.body, htmltag)
+        return "<{0}>{1}</{2}>".format(htmltag, t.body, htmltag)
 
     tests = [
         PpTestSpec(
@@ -383,7 +406,7 @@ class TestCommonHelperExpressions(PyparsingExpressionTestCase):
         ),
         PpTestSpec(
             desc = "A counted array of words",
-            expr = pp.OneOrMore(pp.countedArray(pp.Word('ab'))),
+            expr = pp.countedArray(pp.Word('ab'))[...],
             text = "2 aaa bbb 0 3 abab bbaa abbab",
             expected_list = [['aaa', 'bbb'], [], ['abab', 'bbaa', 'abbab']],
         ),
@@ -408,7 +431,7 @@ class TestCommonHelperExpressions(PyparsingExpressionTestCase):
         ),
         PpTestSpec(
             desc = "using oneOf (shortcut for Literal('a') | Literal('b') | Literal('c'))",
-            expr = pp.OneOrMore(pp.oneOf("a b c")),
+            expr = pp.oneOf("a b c")[...],
             text = "a b a b b a c c a b b",
             expected_list = ['a', 'b', 'a', 'b', 'b', 'a', 'c', 'c', 'a', 'b', 'b'],
         ),
@@ -431,24 +454,31 @@ class TestCommonHelperExpressions(PyparsingExpressionTestCase):
     ]
 
 
-#============ MAIN ================
+def _get_decl_line_no(cls):
+    import inspect
+    return inspect.getsourcelines(cls)[1]
+
+
+# get all test case classes defined in this module and sort them by decl line no
+test_case_classes = list(PyparsingExpressionTestCase.__subclasses__())
+test_case_classes.sort(key=_get_decl_line_no)
+
+# make into a suite and run it - this will run the tests in the same order
+# they are declared in this module
+#
+# runnable from setup.py using "python setup.py test -s simple_unit_tests.suite"
+#
+suite = unittest.TestSuite(cls() for cls in test_case_classes)
+
+
+# ============ MAIN ================
 
 if __name__ == '__main__':
-    # we use unittest features that are in Py3 only, bail out if run on Py2
     import sys
     if sys.version_info[0] < 3:
-        print("simple_unit_tests.py runs on Python 3 only")
-        sys.exit(0)
+        print("simple_unit_tests.py requires Python 3.x - exiting...")
+        exit(0)
 
-    import inspect
-    def get_decl_line_no(cls):
-        return inspect.getsourcelines(cls)[1]
+    result = unittest.TextTestRunner().run(suite)
 
-    # get all test case classes defined in this module and sort them by decl line no
-    test_case_classes = list(PyparsingExpressionTestCase.__subclasses__())
-    test_case_classes.sort(key=get_decl_line_no)
-
-    # make into a suite and run it - this will run the tests in the same order
-    # they are declared in this module
-    suite = unittest.TestSuite(cls() for cls in test_case_classes)
-    unittest.TextTestRunner().run(suite)
+    exit(0 if result.wasSuccessful() else 1)

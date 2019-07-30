@@ -2,6 +2,387 @@
 Change Log
 ==========
 
+Version 2.4.2 - July, 2019
+--------------------------
+- Updated the shorthand notation that has been added for repetition
+  expressions: expr[min, max], with '...' valid as a min or max value:
+     - expr[...] and expr[0, ...] are equivalent to ZeroOrMore(expr)
+     - expr[1, ...] is equivalent to OneOrMore(expr)
+     - expr[n, ...] or expr[n,] is equivalent
+          to expr*n + ZeroOrMore(expr)
+          (read as "n or more instances of expr")
+     - expr[..., n] is equivalent to expr*(0, n)
+     - expr[m, n] is equivalent to expr*(m, n)
+  Note that expr[..., n] and expr[m, n] do not raise an exception
+  if more than n exprs exist in the input stream.  If this
+  behavior is desired, then write expr[..., n] + ~expr.
+
+  Better interpretation of [...] as ZeroOrMore raised by crowsonkb,
+  thanks for keeping me in line!
+
+  If upgrading from 2.4.1 or 2.4.1.1 and you have used `expr[...]`
+  for `OneOrMore(expr)`, it must be updated to `expr[1, ...]`.
+
+- The defaults on all the `__diag__` switches have been set to False,
+  to avoid getting alarming warnings. To use these diagnostics, set
+  them to True after importing pyparsing.
+
+  Example:
+
+      import pyparsing as pp
+      pp.__diag__.warn_multiple_tokens_in_named_alternation = True
+
+- Fixed bug introduced by the use of __getitem__ for repetition,
+  overlooking Python's legacy implementation of iteration
+  by sequentially calling __getitem__ with increasing numbers until
+  getting an IndexError. Found during investigation of problem
+  reported by murlock, merci!
+
+
+Version 2.4.2a1 - July, 2019
+----------------------------
+It turns out I got the meaning of `[...]` absolutely backwards,
+so I've deleted 2.4.1 and am repushing this release as 2.4.2a1
+for people to give it a try before I can call it ready to go.
+
+The `expr[...]` notation was pushed out to be synonymous with
+`OneOrMore(expr)`, but this is really counter to most Python
+notations (and even other internal pyparsing notations as well).
+It should have been defined to be equivalent to ZeroOrMore(expr).
+
+- Changed [...] to emit ZeroOrMore instead of OneOrMore.
+
+- Removed code that treats ParserElements like iterables.
+
+- Change all __diag__ switches to False.
+
+
+Version 2.4.1.1 - July 24, 2019
+-------------------------------
+This is a re-release of version 2.4.1 to restore the release history
+in PyPI, since the 2.4.1 release was deleted.
+
+There are 3 known issues in this release, which are fixed in
+the upcoming 2.4.2:
+
+- API change adding support for `expr[...]` - the original
+  code in 2.4.1 incorrectly implemented this as OneOrMore.
+  Code using this feature under this relase should explicitly
+  use `expr[0, ...]` for ZeroOrMore and `expr[1, ...]` for
+  OneOrMore. In 2.4.2 you will be able to write `expr[...]`
+  equivalent to `ZeroOrMore(expr)`.
+
+- Bug if composing And, Or, MatchFirst, or Each expressions
+  using an expression. This only affects code which uses
+  explicit expression construction using the And, Or, etc.
+  classes instead of using overloaded operators '+', '^', and
+  so on. If constructing an And using a single expression,
+  you may get an error that "cannot multiply ParserElement by
+  0 or (0, 0)" or a Python `IndexError`. Change code like
+
+    cmd = Or(Word(alphas))
+
+  to
+
+    cmd = Or([Word(alphas)])
+
+  (Note that this is not the recommended style for constructing
+  Or expressions.)
+
+- Some newly-added `__diag__` switches are enabled by default,
+  which may give rise to noisy user warnings for existing parsers.
+  You can disable them using:
+
+    import pyparsing as pp
+    pp.__diag__.warn_multiple_tokens_in_named_alternation = False
+    pp.__diag__.warn_ungrouped_named_tokens_in_collection = False
+    pp.__diag__.warn_name_set_on_empty_Forward = False
+    pp.__diag__.warn_on_multiple_string_args_to_oneof = False
+    pp.__diag__.enable_debug_on_named_expressions = False
+
+  In 2.4.2 these will all be set to False by default.
+
+
+Version 2.4.1 - July, 2019
+--------------------------
+- NOTE: Deprecated functions and features that will be dropped
+  in pyparsing 2.5.0 (planned next release):
+
+  . support for Python 2 - ongoing users running with
+    Python 2 can continue to use pyparsing 2.4.1
+
+  . ParseResults.asXML() - if used for debugging, switch
+    to using ParseResults.dump(); if used for data transfer,
+    use ParseResults.asDict() to convert to a nested Python
+    dict, which can then be converted to XML or JSON or
+    other transfer format
+
+  . operatorPrecedence synonym for infixNotation -
+    convert to calling infixNotation
+
+  . commaSeparatedList - convert to using
+    pyparsing_common.comma_separated_list
+
+  . upcaseTokens and downcaseTokens - convert to using
+    pyparsing_common.upcaseTokens and downcaseTokens
+
+  . __compat__.collect_all_And_tokens will not be settable to
+    False to revert to pre-2.3.1 results name behavior -
+    review use of names for MatchFirst and Or expressions
+    containing And expressions, as they will return the
+    complete list of parsed tokens, not just the first one.
+    Use __diag__.warn_multiple_tokens_in_named_alternation
+    (described below) to help identify those expressions
+    in your parsers that will have changed as a result.
+
+- A new shorthand notation has been added for repetition
+  expressions: expr[min, max], with '...' valid as a min
+  or max value:
+     - expr[...] is equivalent to OneOrMore(expr)
+     - expr[0, ...] is equivalent to ZeroOrMore(expr)
+     - expr[1, ...] is equivalent to OneOrMore(expr)
+     - expr[n, ...] or expr[n,] is equivalent
+          to expr*n + ZeroOrMore(expr)
+          (read as "n or more instances of expr")
+     - expr[..., n] is equivalent to expr*(0, n)
+     - expr[m, n] is equivalent to expr*(m, n)
+  Note that expr[..., n] and expr[m, n] do not raise an exception
+  if more than n exprs exist in the input stream.  If this
+  behavior is desired, then write expr[..., n] + ~expr.
+
+- '...' can also be used as short hand for SkipTo when used
+  in adding parse expressions to compose an And expression.
+
+      Literal('start') + ... + Literal('end')
+      And(['start', ..., 'end'])
+
+  are both equivalent to:
+
+      Literal('start') + SkipTo('end')("_skipped*") + Literal('end')
+
+  The '...' form has the added benefit of not requiring repeating
+  the skip target expression. Note that the skipped text is
+  returned with '_skipped' as a results name, and that the contents of
+  `_skipped` will contain a list of text from all `...`s in the expression.
+
+- '...' can also be used as a "skip forward in case of error" expression:
+
+        expr = "start" + (Word(nums).setName("int") | ...) + "end"
+
+        expr.parseString("start 456 end")
+        ['start', '456', 'end']
+
+        expr.parseString("start 456 foo 789 end")
+        ['start', '456', 'foo 789 ', 'end']
+        - _skipped: ['foo 789 ']
+
+        expr.parseString("start foo end")
+        ['start', 'foo ', 'end']
+        - _skipped: ['foo ']
+
+        expr.parseString("start end")
+        ['start', '', 'end']
+        - _skipped: ['missing <int>']
+
+  Note that in all the error cases, the '_skipped' results name is
+  present, showing a list of the extra or missing items.
+
+  This form is only valid when used with the '|' operator.
+
+- Improved exception messages to show what was actually found, not
+  just what was expected.
+
+    word = pp.Word(pp.alphas)
+    pp.OneOrMore(word).parseString("aaa bbb 123", parseAll=True)
+
+  Former exception message:
+
+    pyparsing.ParseException: Expected end of text (at char 8), (line:1, col:9)
+
+  New exception message:
+
+    pyparsing.ParseException: Expected end of text, found '1' (at char 8), (line:1, col:9)
+
+- Added diagnostic switches to help detect and warn about common
+  parser construction mistakes, or enable additional parse
+  debugging. Switches are attached to the pyparsing.__diag__
+  namespace object:
+     - warn_multiple_tokens_in_named_alternation - flag to enable warnings when a results
+       name is defined on a MatchFirst or Or expression with one or more And subexpressions
+       (default=True)
+     - warn_ungrouped_named_tokens_in_collection - flag to enable warnings when a results
+       name is defined on a containing expression with ungrouped subexpressions that also
+       have results names (default=True)
+     - warn_name_set_on_empty_Forward - flag to enable warnings whan a Forward is defined
+       with a results name, but has no contents defined (default=False)
+     - warn_on_multiple_string_args_to_oneof - flag to enable warnings whan oneOf is
+       incorrectly called with multiple str arguments (default=True)
+     - enable_debug_on_named_expressions - flag to auto-enable debug on all subsequent
+       calls to ParserElement.setName() (default=False)
+
+  warn_multiple_tokens_in_named_alternation is intended to help
+  those who currently have set __compat__.collect_all_And_tokens to
+  False as a workaround for using the pre-2.3.1 code with named
+  MatchFirst or Or expressions containing an And expression.
+
+- Added ParseResults.from_dict classmethod, to simplify creation
+  of a ParseResults with results names using a dict, which may be nested.
+  This makes it easy to add a sub-level of named items to the parsed
+  tokens in a parse action.
+
+- Added asKeyword argument (default=False) to oneOf, to force
+  keyword-style matching on the generated expressions.
+
+- ParserElement.runTests now accepts an optional 'file' argument to
+  redirect test output to a file-like object (such as a StringIO,
+  or opened file). Default is to write to sys.stdout.
+
+- conditionAsParseAction is a helper method for constructing a
+  parse action method from a predicate function that simply
+  returns a boolean result. Useful for those places where a
+  predicate cannot be added using addCondition, but must be
+  converted to a parse action (such as in infixNotation). May be
+  used as a decorator if default message and exception types
+  can be used. See ParserElement.addCondition for more details
+  about the expected signature and behavior for predicate condition
+  methods.
+
+- While investigating issue #93, I found that Or and
+  addCondition could interact to select an alternative that
+  is not the longest match. This is because Or first checks
+  all alternatives for matches without running attached
+  parse actions or conditions, orders by longest match, and
+  then rechecks for matches with conditions and parse actions.
+  Some expressions, when checking with conditions, may end
+  up matching on a shorter token list than originally matched,
+  but would be selected because of its original priority.
+  This matching code has been expanded to do more extensive
+  searching for matches when a second-pass check matches a
+  smaller list than in the first pass.
+
+- Fixed issue #87, a regression in indented block.
+  Reported by Renz Bagaporo, who submitted a very nice repro
+  example, which makes the bug-fixing process a lot easier,
+  thanks!
+
+- Fixed MemoryError issue #85 and #91 with str generation for
+  Forwards. Thanks decalage2 and Harmon758 for your patience.
+
+- Modified setParseAction to accept None as an argument,
+  indicating that all previously-defined parse actions for the
+  expression should be cleared.
+
+- Modified pyparsing_common.real and sci_real to parse reals
+  without leading integer digits before the decimal point,
+  consistent with Python real number formats. Original PR #98
+  submitted by ansobolev.
+
+- Modified runTests to call postParse function before dumping out
+  the parsed results - allows for postParse to add further results,
+  such as indications of additional validation success/failure.
+
+- Updated statemachine example: refactored state transitions to use
+  overridden classmethods; added <statename>Mixin class to simplify
+  definition of application classes that "own" the state object and
+  delegate to it to model state-specific properties and behavior.
+
+- Added example nested_markup.py, showing a simple wiki markup with
+  nested markup directives, and illustrating the use of '...' for
+  skipping over input to match the next expression. (This example
+  uses syntax that is not valid under Python 2.)
+
+- Rewrote delta_time.py example (renamed from deltaTime.py) to
+  fix some omitted formats and upgrade to latest pyparsing idioms,
+  beginning with writing an actual BNF.
+
+- With the help and encouragement from several contributors, including
+  Matěj Cepl and Cengiz Kaygusuz, I've started cleaning up the internal
+  coding styles in core pyparsing, bringing it up to modern coding
+  practices from pyparsing's early development days dating back to
+  2003. Whitespace has been largely standardized along PEP8 guidelines,
+  removing extra spaces around parentheses, and adding them around
+  arithmetic operators and after colons and commas. I was going to hold
+  off on doing this work until after 2.4.1, but after cleaning up a
+  few trial classes, the difference was so significant that I continued
+  on to the rest of the core code base. This should facilitate future
+  work and submitted PRs, allowing them to focus on substantive code
+  changes, and not get sidetracked by whitespace issues.
+
+
+Version 2.4.0 - April, 2019
+---------------------------
+- Well, it looks like the API change that was introduced in 2.3.1 was more
+  drastic than expected, so for a friendlier forward upgrade path, this
+  release:
+  . Bumps the current version number to 2.4.0, to reflect this
+    incompatible change.
+  . Adds a pyparsing.__compat__ object for specifying compatibility with
+    future breaking changes.
+  . Conditionalizes the API-breaking behavior, based on the value
+    pyparsing.__compat__.collect_all_And_tokens.  By default, this value
+    will be set to True, reflecting the new bugfixed behavior. To set this
+    value to False, add to your code:
+
+        import pyparsing
+        pyparsing.__compat__.collect_all_And_tokens = False
+
+  . User code that is dependent on the pre-bugfix behavior can restore
+    it by setting this value to False.
+
+  In 2.5 and later versions, the conditional code will be removed and
+  setting the flag to True or False in these later versions will have no
+  effect.
+
+- Updated unitTests.py and simple_unit_tests.py to be compatible with
+  "python setup.py test". To run tests using setup, do:
+
+      python setup.py test
+      python setup.py test -s unitTests.suite
+      python setup.py test -s simple_unit_tests.suite
+
+  Prompted by issue #83 and PR submitted by bdragon28, thanks.
+
+- Fixed bug in runTests handling '\n' literals in quoted strings.
+
+- Added tag_body attribute to the start tag expressions generated by
+  makeHTMLTags, so that you can avoid using SkipTo to roll your own
+  tag body expression:
+
+      a, aEnd = pp.makeHTMLTags('a')
+      link = a + a.tag_body("displayed_text") + aEnd
+      for t in s.searchString(html_page):
+          print(t.displayed_text, '->', t.startA.href)
+
+- indentedBlock failure handling was improved; PR submitted by TMiguelT,
+  thanks!
+
+- Address Py2 incompatibility in simpleUnitTests, plus explain() and
+  Forward str() cleanup; PRs graciously provided by eswald.
+
+- Fixed docstring with embedded '\w', which creates SyntaxWarnings in
+  Py3.8, issue #80.
+
+- Examples:
+
+  - Added example parser for rosettacode.org tutorial compiler.
+
+  - Added example to show how an HTML table can be parsed into a
+    collection of Python lists or dicts, one per row.
+
+  - Updated SimpleSQL.py example to handle nested selects, reworked
+    'where' expression to use infixNotation.
+
+  - Added include_preprocessor.py, similar to macroExpander.py.
+
+  - Examples using makeHTMLTags use new tag_body expression when
+    retrieving a tag's body text.
+
+  - Updated examples that are runnable as unit tests:
+
+        python setup.py test -s examples.antlr_grammar_tests
+        python setup.py test -s examples.test_bibparse
+
+
 Version 2.3.1 - January, 2019
 -----------------------------
 - POSSIBLE API CHANGE: this release fixes a bug when results names were
@@ -28,7 +409,7 @@ Version 2.3.1 - January, 2019
             # parse a string with a numeric second value instead of alpha
             expr.parseString("123 355")
         except pp.ParseException as pe:
-            print_(pp.ParseException.explain(pe))
+            print(pp.ParseException.explain(pe))
 
   Prints:
         123 355
@@ -1354,7 +1735,7 @@ finally time to bump the minor rev number on pyparsing - so
         stack (multiple indentedBlock expressions
         within a single grammar should share a common indentStack)
     - indent - boolean indicating whether block must be indented
-        beyond the the current level; set to False for block of
+        beyond the current level; set to False for block of
         left-most statements (default=True)
 
   A valid block must contain at least one indented statement.

@@ -117,49 +117,11 @@ class ParseTestCase(TestCase):
 
 class PyparsingTestInit(ParseTestCase):
     def setUp(self):
-        from pyparsing import __version__ as pyparsingVersion
-        print_("Beginning test of pyparsing, version", pyparsingVersion)
+        from pyparsing import __version__ as pyparsingVersion, __versionTime__ as pyparsingVersionTime
+        print_("Beginning test of pyparsing, version", pyparsingVersion, pyparsingVersionTime)
         print_("Python version", sys.version)
     def tearDown(self):
         pass
-
-if 0:
-    class ParseASMLTest(ParseTestCase):
-        def runTest(self):
-            import parseASML
-            files = [ ("A52759.txt", 2150, True, True, 0.38, 25, "21:47:17", "22:07:32", 235),
-                      ("24141506_P5107RM59_399A1457N1_PHS04", 373,True, True, 0.5, 1, "11:35:25", "11:37:05", 183),
-                      ("24141506_P5107RM59_399A1457N1_PHS04B", 373, True, True, 0.5, 1, "01:02:54", "01:04:49", 186),
-                      ("24157800_P5107RM74_399A1828M1_PHS04", 1141, True, False, 0.5, 13, "00:00:54", "23:59:48", 154) ]
-            for testFile,numToks,trkInpUsed,trkOutpUsed,maxDelta,numWafers,minProcBeg,maxProcEnd,maxLevStatsIV in files:
-                print_("Parsing",testFile,"...", end=' ')
-                #~ text = "\n".join( [ line for line in file(testFile) ] )
-                #~ results = parseASML.BNF().parseString( text )
-                results = parseASML.BNF().parseFile( testFile )
-                #~ pprint.pprint( results.asList() )
-                #~ pprint.pprint( results.batchData.asList() )
-                #~ print results.batchData.keys()
-
-                allToks = flatten( results.asList() )
-                self.assertTrue(len(allToks) == numToks,
-                    "wrong number of tokens parsed (%s), got %d, expected %d" % (testFile, len(allToks),numToks))
-                self.assertTrue(results.batchData.trackInputUsed == trkInpUsed, "error evaluating results.batchData.trackInputUsed")
-                self.assertTrue(results.batchData.trackOutputUsed == trkOutpUsed, "error evaluating results.batchData.trackOutputUsed")
-                self.assertTrue(results.batchData.maxDelta == maxDelta,"error evaluating results.batchData.maxDelta")
-                self.assertTrue(len(results.waferData) == numWafers, "did not read correct number of wafers")
-                self.assertTrue(min([wd.procBegin for wd in results.waferData]) == minProcBeg, "error reading waferData.procBegin")
-                self.assertTrue(max([results.waferData[k].procEnd for k in range(len(results.waferData))]) == maxProcEnd, "error reading waferData.procEnd")
-                self.assertTrue(sum(results.levelStatsIV['MAX']) == maxLevStatsIV, "error reading levelStatsIV")
-                self.assertTrue(sum(results.levelStatsIV.MAX) == maxLevStatsIV, "error reading levelStatsIV")
-                print_("OK")
-                print_(testFile,len(allToks))
-                #~ print "results.batchData.trackInputUsed =",results.batchData.trackInputUsed
-                #~ print "results.batchData.trackOutputUsed =",results.batchData.trackOutputUsed
-                #~ print "results.batchData.maxDelta =",results.batchData.maxDelta
-                #~ print len(results.waferData)," wafers"
-                #~ print min([wd.procBegin for wd in results.waferData])
-                #~ print max([results.waferData[k].procEnd for k in range(len(results.waferData))])
-                #~ print sum(results.levelStatsIV['MAX.'])
 
 
 class ParseFourFnTest(ParseTestCase):
@@ -237,12 +199,7 @@ class ParseConfigFileTest(ParseTestCase):
                 iniFileLines = "\n".join(infile.read().splitlines())
             iniData = configParse.inifile_BNF().parseString( iniFileLines )
             print_(len(flatten(iniData.asList())))
-            #~ pprint.pprint( iniData.asList() )
-            #~ pprint.pprint( repr(iniData) )
-            #~ print len(iniData), len(flatten(iniData.asList()))
             print_(list(iniData.keys()))
-            #~ print iniData.users.keys()
-            #~ print
             self.assertEqual(len(flatten(iniData.asList())), numToks, "file %s not parsed correctly" % fnam)
             for chk in resCheckList:
                 var = iniData
@@ -269,23 +226,178 @@ class ParseJSONDataTest(ParseTestCase):
     def runTest(self):
         from examples.jsonParser import jsonObject
         from test.jsonParserTests import test1,test2,test3,test4,test5
-        from test.jsonParserTests import test1,test2,test3,test4,test5
 
         expected = [
-            [],
-            [],
-            [],
-            [],
-            [],
+            [['glossary',
+             [['title', 'example glossary'],
+              ['GlossDiv',
+               [['title', 'S'],
+                ['GlossList',
+                 [[['ID', 'SGML'],
+                   ['SortAs', 'SGML'],
+                   ['GlossTerm', 'Standard Generalized Markup Language'],
+                   ['Acronym', 'SGML'],
+                   ['LargestPrimeLessThan100', 97],
+                   ['AvogadroNumber', 6.02e+23],
+                   ['EvenPrimesGreaterThan2', None],
+                   ['PrimesLessThan10', [2, 3, 5, 7]],
+                   ['WMDsFound', False],
+                   ['IraqAlQaedaConnections', None],
+                   ['Abbrev', 'ISO 8879:1986'],
+                   ['GlossDef',
+                    'A meta-markup language, used to create markup languages such as '
+                    'DocBook.'],
+                   ['GlossSeeAlso', ['GML', 'XML', 'markup']],
+                   ['EmptyDict', []],
+                   ['EmptyList', [[]]]]]]]]]
+             ]]
+            ,
+            [['menu',
+             [['id', 'file'],
+              ['value', 'File:'],
+              ['popup',
+               [['menuitem',
+                 [[['value', 'New'], ['onclick', 'CreateNewDoc()']],
+                  [['value', 'Open'], ['onclick', 'OpenDoc()']],
+                  [['value', 'Close'], ['onclick', 'CloseDoc()']]]]]]]]]
+            ,
+            [['widget',
+             [['debug', 'on'],
+              ['window',
+               [['title', 'Sample Konfabulator Widget'],
+                ['name', 'main_window'],
+                ['width', 500],
+                ['height', 500]]],
+              ['image',
+               [['src', 'Images/Sun.png'],
+                ['name', 'sun1'],
+                ['hOffset', 250],
+                ['vOffset', 250],
+                ['alignment', 'center']]],
+              ['text',
+               [['data', 'Click Here'],
+                ['size', 36],
+                ['style', 'bold'],
+                ['name', 'text1'],
+                ['hOffset', 250],
+                ['vOffset', 100],
+                ['alignment', 'center'],
+                ['onMouseUp', 'sun1.opacity = (sun1.opacity / 100) * 90;']]]]]]
+            ,
+            [['web-app',
+             [['servlet',
+               [[['servlet-name', 'cofaxCDS'],
+                 ['servlet-class', 'org.cofax.cds.CDSServlet'],
+                 ['init-param',
+                  [['configGlossary:installationAt', 'Philadelphia, PA'],
+                   ['configGlossary:adminEmail', 'ksm@pobox.com'],
+                   ['configGlossary:poweredBy', 'Cofax'],
+                   ['configGlossary:poweredByIcon', '/images/cofax.gif'],
+                   ['configGlossary:staticPath', '/content/static'],
+                   ['templateProcessorClass', 'org.cofax.WysiwygTemplate'],
+                   ['templateLoaderClass', 'org.cofax.FilesTemplateLoader'],
+                   ['templatePath', 'templates'],
+                   ['templateOverridePath', ''],
+                   ['defaultListTemplate', 'listTemplate.htm'],
+                   ['defaultFileTemplate', 'articleTemplate.htm'],
+                   ['useJSP', False],
+                   ['jspListTemplate', 'listTemplate.jsp'],
+                   ['jspFileTemplate', 'articleTemplate.jsp'],
+                   ['cachePackageTagsTrack', 200],
+                   ['cachePackageTagsStore', 200],
+                   ['cachePackageTagsRefresh', 60],
+                   ['cacheTemplatesTrack', 100],
+                   ['cacheTemplatesStore', 50],
+                   ['cacheTemplatesRefresh', 15],
+                   ['cachePagesTrack', 200],
+                   ['cachePagesStore', 100],
+                   ['cachePagesRefresh', 10],
+                   ['cachePagesDirtyRead', 10],
+                   ['searchEngineListTemplate', 'forSearchEnginesList.htm'],
+                   ['searchEngineFileTemplate', 'forSearchEngines.htm'],
+                   ['searchEngineRobotsDb', 'WEB-INF/robots.db'],
+                   ['useDataStore', True],
+                   ['dataStoreClass', 'org.cofax.SqlDataStore'],
+                   ['redirectionClass', 'org.cofax.SqlRedirection'],
+                   ['dataStoreName', 'cofax'],
+                   ['dataStoreDriver', 'com.microsoft.jdbc.sqlserver.SQLServerDriver'],
+                   ['dataStoreUrl',
+                    'jdbc:microsoft:sqlserver://LOCALHOST:1433;DatabaseName=goon'],
+                   ['dataStoreUser', 'sa'],
+                   ['dataStorePassword', 'dataStoreTestQuery'],
+                   ['dataStoreTestQuery', "SET NOCOUNT ON;select test='test';"],
+                   ['dataStoreLogFile', '/usr/local/tomcat/logs/datastore.log'],
+                   ['dataStoreInitConns', 10],
+                   ['dataStoreMaxConns', 100],
+                   ['dataStoreConnUsageLimit', 100],
+                   ['dataStoreLogLevel', 'debug'],
+                   ['maxUrlLength', 500]]]],
+                [['servlet-name', 'cofaxEmail'],
+                 ['servlet-class', 'org.cofax.cds.EmailServlet'],
+                 ['init-param', [['mailHost', 'mail1'], ['mailHostOverride', 'mail2']]]],
+                [['servlet-name', 'cofaxAdmin'],
+                 ['servlet-class', 'org.cofax.cds.AdminServlet']],
+                [['servlet-name', 'fileServlet'],
+                 ['servlet-class', 'org.cofax.cds.FileServlet']],
+                [['servlet-name', 'cofaxTools'],
+                 ['servlet-class', 'org.cofax.cms.CofaxToolsServlet'],
+                 ['init-param',
+                  [['templatePath', 'toolstemplates/'],
+                   ['log', 1],
+                   ['logLocation', '/usr/local/tomcat/logs/CofaxTools.log'],
+                   ['logMaxSize', ''],
+                   ['dataLog', 1],
+                   ['dataLogLocation', '/usr/local/tomcat/logs/dataLog.log'],
+                   ['dataLogMaxSize', ''],
+                   ['removePageCache', '/content/admin/remove?cache=pages&id='],
+                   ['removeTemplateCache', '/content/admin/remove?cache=templates&id='],
+                   ['fileTransferFolder',
+                    '/usr/local/tomcat/webapps/content/fileTransferFolder'],
+                   ['lookInContext', 1],
+                   ['adminGroupID', 4],
+                   ['betaServer', True]]]]]],
+              ['servlet-mapping',
+               [['cofaxCDS', '/'],
+                ['cofaxEmail', '/cofaxutil/aemail/*'],
+                ['cofaxAdmin', '/admin/*'],
+                ['fileServlet', '/static/*'],
+                ['cofaxTools', '/tools/*']]],
+              ['taglib',
+               [['taglib-uri', 'cofax.tld'],
+                ['taglib-location', '/WEB-INF/tlds/cofax.tld']]]]]]
+            ,
+            [['menu',
+              [['header', 'SVG Viewer'],
+               ['items',
+                [[['id', 'Open']],
+                 [['id', 'OpenNew'], ['label', 'Open New']],
+                 None,
+                 [['id', 'ZoomIn'], ['label', 'Zoom In']],
+                 [['id', 'ZoomOut'], ['label', 'Zoom Out']],
+                 [['id', 'OriginalView'], ['label', 'Original View']],
+                 None,
+                 [['id', 'Quality']],
+                 [['id', 'Pause']],
+                 [['id', 'Mute']],
+                 None,
+                 [['id', 'Find'], ['label', 'Find...']],
+                 [['id', 'FindAgain'], ['label', 'Find Again']],
+                 [['id', 'Copy']],
+                 [['id', 'CopyAgain'], ['label', 'Copy Again']],
+                 [['id', 'CopySVG'], ['label', 'Copy SVG']],
+                 [['id', 'ViewSVG'], ['label', 'View SVG']],
+                 [['id', 'ViewSource'], ['label', 'View Source']],
+                 [['id', 'SaveAs'], ['label', 'Save As']],
+                 None,
+                 [['id', 'Help']],
+                 [['id', 'About'], ['label', 'About Adobe CVG Viewer...']]]]]]]
+            ,
             ]
 
-        for t,exp in zip((test1,test2,test3,test4,test5),expected):
+        for t, exp in zip((test1,test2,test3,test4,test5), expected):
             result = jsonObject.parseString(t)
-##            print result.dump()
             result.pprint()
-            print_()
-##            if result.asList() != exp:
-##                print "Expected %s, parsed results as %s" % (exp, result.asList())
+            self.assertEqual(result.asList(), exp, "failed test {0}".format(t))
 
 class ParseCommaSeparatedValuesTest(ParseTestCase):
     def runTest(self):
@@ -352,8 +464,7 @@ class ParseEBNFTest(ParseTestCase):
         print_('Parsing EBNF grammar with EBNF parser...')
         parsers = ebnf.parse(grammar, table)
         ebnf_parser = parsers['syntax']
-        #~ print ",\n ".join( str(parsers.keys()).split(", ") )
-        print_("-","\n- ".join( list(parsers.keys()) ))
+        print_("-","\n- ".join(parsers.keys()))
         self.assertEqual(len(list(parsers.keys())), 13, "failed to construct syntax grammar")
 
         print_('Parsing EBNF grammar with generated EBNF parser...')
@@ -473,10 +584,6 @@ class ParseIDLTest(ParseTestCase):
             )
 
 class ParseVerilogTest(ParseTestCase):
-    def runTest(self):
-        pass
-
-class RunExamplesTest(ParseTestCase):
     def runTest(self):
         pass
 
@@ -818,25 +925,18 @@ class ParseExpressionResultsTest(ParseTestCase):
     def runTest(self):
         from pyparsing import Word,alphas,OneOrMore,Optional,Group
 
-        a = Word("a",alphas).setName("A")
-        b = Word("b",alphas).setName("B")
-        c = Word("c",alphas).setName("C")
+        a = Word("a", alphas).setName("A")
+        b = Word("b", alphas).setName("B")
+        c = Word("c", alphas).setName("C")
         ab = (a + b).setName("AB")
         abc = (ab + c).setName("ABC")
         word = Word(alphas).setName("word")
 
-        #~ words = OneOrMore(word).setName("words")
         words = Group(OneOrMore(~a + word)).setName("words")
 
-        #~ phrase = words.setResultsName("Head") + \
-                    #~ ( abc ^ ab ^ a ).setResultsName("ABC") + \
-                    #~ words.setResultsName("Tail")
-        #~ phrase = words.setResultsName("Head") + \
-                    #~ ( abc | ab | a ).setResultsName("ABC") + \
-                    #~ words.setResultsName("Tail")
-        phrase = words("Head") + \
-                    Group( a + Optional(b + Optional(c)) )("ABC") + \
-                    words("Tail")
+        phrase = (words("Head")
+                  + Group(a + Optional(b + Optional(c)))("ABC")
+                  + words("Tail"))
 
         results = phrase.parseString("xavier yeti alpha beta charlie will beaver")
         print_(results,results.Head, results.ABC,results.Tail)
@@ -993,7 +1093,7 @@ class ReStringRangeTest(ParseTestCase):
 class SkipToParserTests(ParseTestCase):
     def runTest(self):
 
-        from pyparsing import Literal, SkipTo, cStyleComment, ParseBaseException
+        from pyparsing import Literal, SkipTo, cStyleComment, ParseBaseException, And, Word, alphas, nums, Optional, NotAny
 
         thingToFind = Literal('working')
         testExpr = SkipTo(Literal(';'), include=True, ignore=cStyleComment) + thingToFind
@@ -1024,6 +1124,126 @@ class SkipToParserTests(ParseTestCase):
         expr = SkipTo(data + suffix)('prefix') + data + suffix
         result = expr.parseString(text)
         self.assertTrue(isinstance(result.prefix, str), "SkipTo created with wrong saveAsList attribute")
+
+        if PY_3:
+            def define_expr(s):
+                from pyparsing import Literal, And, Word, alphas, nums, Optional, NotAny
+                alpha_word = (~Literal("end") + Word(alphas, asKeyword=True)).setName("alpha")
+                num_word = Word(nums, asKeyword=True).setName("int")
+
+                ret = eval(s)
+                ret.streamline()
+                print_(ret)
+                return ret
+
+            def test(expr, test_string, expected_list, expected_dict):
+                try:
+                    result = expr.parseString(test_string)
+                except Exception as pe:
+                    if any(expected is not None for expected in (expected_list, expected_dict)):
+                        self.assertTrue(False, "{} failed to parse {!r}".format(expr, test_string))
+                else:
+                    self.assertEqual(result.asList(), expected_list)
+                    self.assertEqual(result.asDict(), expected_dict)
+
+            # ellipses for SkipTo
+            # (use eval() to avoid syntax problems when running in Py2)
+            e = define_expr('... + Literal("end")')
+            test(e, "start 123 end", ['start 123 ', 'end'], {'_skipped': ['start 123 ']})
+
+            e = define_expr('Literal("start") + ... + Literal("end")')
+            test(e, "start 123 end", ['start', '123 ', 'end'], {'_skipped': ['123 ']})
+
+            e = define_expr('Literal("start") + ...')
+            test(e, "start 123 end", None, None)
+
+            e = define_expr('And(["start", ..., "end"])')
+            test(e, "start 123 end", ['start', '123 ', 'end'], {'_skipped': ['123 ']})
+
+            e = define_expr('And([..., "end"])')
+            test(e, "start 123 end", ['start 123 ', 'end'], {'_skipped': ['start 123 ']})
+
+            e = define_expr('"start" + (num_word | ...) + "end"')
+            test(e, "start 456 end", ['start', '456', 'end'], {})
+            test(e, "start 123 456 end", ['start', '123', '456 ', 'end'], {'_skipped': ['456 ']})
+            test(e, "start end", ['start', '', 'end'], {'_skipped': ['missing <int>']})
+
+            # e = define_expr('"start" + (num_word | ...)("inner") + "end"')
+            # test(e, "start 456 end", ['start', '456', 'end'], {'inner': '456'})
+
+            e = define_expr('"start" + (alpha_word[...] & num_word[...] | ...) + "end"')
+            test(e, "start 456 red end", ['start', '456', 'red', 'end'], {})
+            test(e, "start red 456 end", ['start', 'red', '456', 'end'], {})
+            test(e, "start 456 red + end", ['start', '456', 'red', '+ ', 'end'], {'_skipped': ['+ ']})
+            test(e, "start red end", ['start', 'red', 'end'], {})
+            test(e, "start 456 end", ['start', '456', 'end'], {})
+            test(e, "start end", ['start', 'end'], {})
+            test(e, "start 456 + end", ['start', '456', '+ ', 'end'], {'_skipped': ['+ ']})
+
+            e = define_expr('"start" + (alpha_word[1, ...] & num_word[1, ...] | ...) + "end"')
+            test(e, "start 456 red end", ['start', '456', 'red', 'end'], {})
+            test(e, "start red 456 end", ['start', 'red', '456', 'end'], {})
+            test(e, "start 456 red + end", ['start', '456', 'red', '+ ', 'end'], {'_skipped': ['+ ']})
+            test(e, "start red end", ['start', 'red ', 'end'], {'_skipped': ['red ']})
+            test(e, "start 456 end", ['start', '456 ', 'end'], {'_skipped': ['456 ']})
+            test(e, "start end", ['start', '', 'end'], {'_skipped': ['missing <{{alpha}... & {int}...}>']})
+            test(e, "start 456 + end", ['start', '456 + ', 'end'], {'_skipped': ['456 + ']})
+
+            e = define_expr('"start" + (alpha_word | ...) + (num_word | ...) + "end"')
+            test(e, "start red 456 end", ['start', 'red', '456', 'end'], {})
+            test(e, "start red end", ['start', 'red', '', 'end'], {'_skipped': ['missing <int>']})
+            test(e, "start end", ['start', '', '', 'end'], {'_skipped': ['missing <alpha>', 'missing <int>']})
+
+            e = define_expr('Literal("start") + ... + "+" + ... + "end"')
+            test(e, "start red + 456 end", ['start', 'red ', '+', '456 ', 'end'], {'_skipped': ['red ', '456 ']})
+
+class EllipsisRepetionTest(ParseTestCase):
+    def runTest(self):
+        import pyparsing as pp
+        import re
+
+        word = pp.Word(pp.alphas).setName("word")
+        num = pp.Word(pp.nums).setName("num")
+
+        exprs = [
+            word[...] + num,
+            word[0, ...] + num,
+            word[1, ...] + num,
+            word[2, ...] + num,
+            word[..., 3] + num,
+            word[2] + num,
+        ]
+
+        expected_res = [
+            r"([abcd]+ )*\d+",
+            r"([abcd]+ )*\d+",
+            r"([abcd]+ )+\d+",
+            r"([abcd]+ ){2,}\d+",
+            r"([abcd]+ ){0,3}\d+",
+            r"([abcd]+ ){2}\d+",
+        ]
+
+        tests = [
+            "aa bb cc dd 123",
+            "bb cc dd 123",
+            "cc dd 123",
+            "dd 123",
+            "123",
+        ]
+
+        all_success = True
+        for expr, expected_re in zip(exprs, expected_res):
+            successful_tests = [t for t in tests if re.match(expected_re, t)]
+            failure_tests = [t for t in tests if not re.match(expected_re, t)]
+            success1, _ = expr.runTests(successful_tests)
+            success2, _ = expr.runTests(failure_tests, failureTests=True)
+            all_success = all_success and success1 and success2
+            if not all_success:
+                print_("Failed expression:", expr)
+                break
+
+        self.assertTrue(all_success, "failed getItem_ellipsis test")
+
 
 class CustomQuotesTest(ParseTestCase):
     def runTest(self):
@@ -1139,28 +1359,9 @@ class RepeaterTest(ParseTestCase):
             ( "abc12abc:abc12abcdef", False ),
             ]
 
-        #~ for tst,result in tests:
-            #~ print tst,
-            #~ try:
-                #~ compoundSeq.parseString(tst)
-                #~ print "MATCH"
-                #~ assert result, "matched when shouldn't have matched"
-            #~ except ParseException:
-                #~ print "NO MATCH"
-                #~ assert not result, "didnt match but should have"
-
-        #~ for tst,result in tests:
-            #~ print tst,
-            #~ if compoundSeq == tst:
-                #~ print "MATCH"
-                #~ assert result, "matched when shouldn't have matched"
-            #~ else:
-                #~ print "NO MATCH"
-                #~ assert not result, "didnt match but should have"
-
-        for tst,result in tests:
+        for tst, result in tests:
             found = False
-            for tokens,start,end in compoundSeq.scanString(tst):
+            for tokens, start, end in compoundSeq.scanString(tst):
                 print_("match:", tokens.asList())
                 found = True
                 break
@@ -1181,8 +1382,6 @@ class RepeaterTest(ParseTestCase):
         for tst,result in tests:
             found = False
             for tokens,start,end in eSeq.scanString(tst):
-                #~ f,b,s = tokens
-                #~ print f,b,s
                 print_(tokens.asList())
                 found = True
             if not found:
@@ -1222,8 +1421,8 @@ class InfixNotationGrammarTest1(ParseTestCase):
         factop = Literal('!')
 
         expr = infixNotation( operand,
-            [("!", 1, opAssoc.LEFT),
-             ("^", 2, opAssoc.RIGHT),
+            [(factop, 1, opAssoc.LEFT),
+             (expop, 2, opAssoc.RIGHT),
              (signop, 1, opAssoc.RIGHT),
              (multop, 2, opAssoc.LEFT),
              (plusop, 2, opAssoc.LEFT),]
@@ -1584,11 +1783,8 @@ class ParseHTMLTagsTest(ParseTestCase):
             print_(test[s:e], "->", t.asList())
             (expectedType, expectedEmpty, expectedBG, expectedFG) = next(resIter)
 
-            tType = t.getName()
-            #~ print tType,"==",expectedType,"?"
-            self.assertTrue(tType in "startBody endBody".split(), "parsed token of unknown type '%s'" % tType)
-            self.assertEqual(tType, expectedType, "expected token of type %s, got %s" % (expectedType, tType))
-            if tType == "startBody":
+            print_(t.dump())
+            if "startBody" in t:
                 self.assertEqual(bool(t.empty), expectedEmpty,
                                  "expected %s token, got %s" % (expectedEmpty and "empty" or "not empty",
                                                                 t.empty and "empty" or "not empty"))
@@ -1596,11 +1792,12 @@ class ParseHTMLTagsTest(ParseTestCase):
                                  "failed to match BGCOLOR, expected %s, got %s" % (expectedBG, t.bgcolor))
                 self.assertEqual(t.fgcolor, expectedFG,
                                  "failed to match FGCOLOR, expected %s, got %s" % (expectedFG, t.bgcolor))
-            elif tType == "endBody":
-                #~ print "end tag"
+            elif "endBody" in t:
+                print_("end tag")
                 pass
             else:
                 print_("BAD!!!")
+
 
 class UpcaseDowncaseUnicode(ParseTestCase):
     def runTest(self):
@@ -2158,14 +2355,6 @@ class VariableParseActionArgsTest(ParseTestCase):
             def __str__(self):
                 return ''.join(self)
 
-        #~ def ClassAsPANew(object):
-            #~ def __new__(cls, t):
-                #~ return object.__new__(cls, t)
-            #~ def __init__(self,t):
-                #~ self.t = t
-            #~ def __str__(self):
-                #~ return self.t
-
         from pyparsing import Literal,OneOrMore
 
         A = Literal("A").setParseAction(pa0)
@@ -2243,15 +2432,12 @@ class OriginalTextForTest(ParseTestCase):
         makeHTMLStartTag = lambda tag: originalTextFor(makeHTMLTags(tag)[0], asString=False)
 
         # use the lambda, Luke
-        #~ start, imge = makeHTMLTags('IMG')
         start = makeHTMLStartTag('IMG')
 
         # don't replace our fancy parse action with rfn,
         # append rfn to the list of parse actions
-        #~ start.setParseAction(rfn)
         start.addParseAction(rfn)
 
-        #start.setParseAction(lambda s,l,t:t.src)
         text = '''_<img src="images/cal.png"
             alt="cal image" width="16" height="15">_'''
         s = start.transformString(text)
@@ -2346,7 +2532,7 @@ class WithAttributeParseActionTest(ParseTestCase):
         <a B="x">3</a>
         <a b="X">4</a>
         <a b="y">5</a>
-        <a class="boo">8</a>
+        <a class="boo">8</ a>
         """
         tagStart, tagEnd = makeHTMLTags("a")
 
@@ -2862,7 +3048,23 @@ class PatientOrTest(ParseTestCase):
             failed = True
         else:
             failed = False
-            self.assertFalse(failed, "invalid logic in Or, fails on longest match with exception in parse action")
+        self.assertFalse(failed, "invalid logic in Or, fails on longest match with exception in parse action")
+
+        # from issue #93
+        word = pp.Word(pp.alphas).setName('word')
+        word_1 = pp.Word(pp.alphas).setName('word_1').addCondition(lambda t: len(t[0]) == 1)
+
+        a = word + (word_1 + word ^ word)
+        b = word * 3
+        c = a ^ b
+        c.streamline()
+        print_(c)
+        test_string = 'foo bar temp'
+        result = c.parseString(test_string)
+        print_(test_string, '->', result.asList())
+
+        self.assertEqual(result.asList(), test_string.split(), "failed to match longest choice")
+
 
 class EachWithOptionalWithResultsNameTest(ParseTestCase):
     def runTest(self):
@@ -2891,7 +3093,8 @@ class UnicodeExpressionTest(ParseTestCase):
 class SetNameTest(ParseTestCase):
     def runTest(self):
         from pyparsing import (oneOf,infixNotation,Word,nums,opAssoc,delimitedList,countedArray,
-            nestedExpr,makeHTMLTags,anyOpenTag,anyCloseTag,commonHTMLEntity,replaceHTMLEntity)
+            nestedExpr,makeHTMLTags,anyOpenTag,anyCloseTag,commonHTMLEntity,replaceHTMLEntity,
+            Forward,ZeroOrMore)
 
         a = oneOf("a b c")
         b = oneOf("d e f")
@@ -2904,6 +3107,8 @@ class SetNameTest(ParseTestCase):
                         [
                         (('?',':'),3,opAssoc.LEFT),
                         ])
+        recursive = Forward()
+        recursive <<= a + ZeroOrMore(b + recursive)
 
         tests = [
             a,
@@ -2913,6 +3118,7 @@ class SetNameTest(ParseTestCase):
             arith_expr.expr,
             arith_expr2,
             arith_expr2.expr,
+            recursive,
             delimitedList(Word(nums).setName("int")),
             countedArray(Word(nums).setName("int")),
             nestedExpr(),
@@ -2926,10 +3132,11 @@ class SetNameTest(ParseTestCase):
             a | b | c
             d | e | f
             {a | b | c | d | e | f}
-            Forward: ...
+            Forward: + | - term
             + | - term
-            Forward: ...
+            Forward: ?: term
             ?: term
+            Forward: {a | b | c [{d | e | f : ...}]...}
             int [, int]...
             (len) int...
             nested () expression
@@ -2940,6 +3147,7 @@ class SetNameTest(ParseTestCase):
 
         for t,e in zip(tests, expected):
             tname = str(t)
+            print_(tname)
             self.assertEqual(tname, e, "expression name mismatch, expected {0} got {1}".format(e, tname))
 
 class TrimArityExceptionMaskingTest(ParseTestCase):
@@ -3006,6 +3214,24 @@ class TrimArityExceptionMaskingTest2(ParseTestCase):
 
         K()
 
+
+class ClearParseActionsTest(ParseTestCase):
+    def runTest(self):
+        import pyparsing as pp
+        ppc = pp.pyparsing_common
+
+        realnum = ppc.real()
+        self.assertEqual(realnum.parseString("3.14159")[0], 3.14159, "failed basic real number parsing")
+
+        # clear parse action that converts to float
+        realnum.setParseAction(None)
+        self.assertEqual(realnum.parseString("3.14159")[0], "3.14159", "failed clearing parse action")
+
+        # add a new parse action that tests if a '.' is prsent
+        realnum.addParseAction(lambda t: '.' in t[0])
+        self.assertEqual(realnum.parseString("3.14159")[0], True,
+                         "failed setting new parse action after clearing parse action")
+
 class OneOrMoreStopTest(ParseTestCase):
     def runTest(self):
         from pyparsing import (Word, OneOrMore, alphas, Keyword, CaselessKeyword,
@@ -3017,6 +3243,10 @@ class OneOrMoreStopTest(ParseTestCase):
         for ender in (END, "END", CaselessKeyword("END")):
             expr = BEGIN + OneOrMore(body_word, stopOn=ender) + END
             self.assertEqual(test, expr, "Did not successfully stop on ending expression %r" % ender)
+
+            if PY_3:
+                expr = eval('BEGIN + body_word[...].stopOn(ender) + END')
+                self.assertEqual(test, expr, "Did not successfully stop on ending expression %r" % ender)
 
         number = Word(nums+',.()').setName("number with optional commas")
         parser= (OneOrMore(Word(alphanums+'-/.'), stopOn=number)('id').setParseAction(' '.join)
@@ -3035,6 +3265,10 @@ class ZeroOrMoreStopTest(ParseTestCase):
         for ender in (END, "END", CaselessKeyword("END")):
             expr = BEGIN + ZeroOrMore(body_word, stopOn=ender) + END
             self.assertEqual(test, expr, "Did not successfully stop on ending expression %r" % ender)
+
+            if PY_3:
+                expr = eval('BEGIN + body_word[0, ...].stopOn(ender) + END')
+                self.assertEqual(test, expr, "Did not successfully stop on ending expression %r" % ender)
 
 class NestedAsDictTest(ParseTestCase):
     def runTest(self):
@@ -3306,6 +3540,111 @@ class CommonExpressionsTest(ParseTestCase):
             self.assertEqual(result[0], expected, "numeric parse failed (wrong value) (%s should be %s)" % (result[0], expected))
             self.assertEqual(type(result[0]), type(expected), "numeric parse failed (wrong type) (%s should be %s)" % (type(result[0]), type(expected)))
 
+
+class NumericExpressionsTest(ParseTestCase):
+    def runTest(self):
+        import pyparsing as pp
+        ppc = pp.pyparsing_common
+
+        # disable parse actions that do type conversion so we don't accidentally trigger
+        # conversion exceptions when what we want to check is the parsing expression
+        real = ppc.real().setParseAction(None)
+        sci_real = ppc.sci_real().setParseAction(None)
+        signed_integer = ppc.signed_integer().setParseAction(None)
+
+        from itertools import product
+
+        def make_tests():
+            leading_sign = ['+', '-', '']
+            leading_digit = ['0', '']
+            dot = ['.', '']
+            decimal_digit = ['1', '']
+            e = ['e', 'E', '']
+            e_sign = ['+', '-', '']
+            e_int = ['22', '']
+            stray = ['9', '.', '']
+
+            seen = set()
+            seen.add('')
+            for parts in product(leading_sign, stray, leading_digit, dot, decimal_digit, stray, e, e_sign, e_int,
+                                 stray):
+                parts_str = ''.join(parts).strip()
+                if parts_str in seen:
+                    continue
+                seen.add(parts_str)
+                yield parts_str
+
+            print_(len(seen)-1, "tests produced")
+
+        # collect tests into valid/invalid sets, depending on whether they evaluate to valid Python floats or ints
+        valid_ints = set()
+        valid_reals = set()
+        valid_sci_reals = set()
+        invalid_ints = set()
+        invalid_reals = set()
+        invalid_sci_reals = set()
+
+        # check which strings parse as valid floats or ints, and store in related valid or invalid test sets
+        for test_str in make_tests():
+            if '.' in test_str or 'e' in test_str.lower():
+                try:
+                    float(test_str)
+                except ValueError:
+                    invalid_sci_reals.add(test_str)
+                    if 'e' not in test_str.lower():
+                        invalid_reals.add(test_str)
+                else:
+                    valid_sci_reals.add(test_str)
+                    if 'e' not in test_str.lower():
+                        valid_reals.add(test_str)
+
+            try:
+                int(test_str)
+            except ValueError:
+                invalid_ints.add(test_str)
+            else:
+                valid_ints.add(test_str)
+
+        # now try all the test sets against their respective expressions
+        all_pass = True
+        suppress_results = {'printResults': False}
+        for expr, tests, is_fail, fn in zip([real, sci_real, signed_integer]*2,
+                                            [valid_reals, valid_sci_reals, valid_ints,
+                                             invalid_reals, invalid_sci_reals, invalid_ints],
+                                            [False, False, False, True, True, True],
+                                            [float, float, int]*2):
+            #
+            # success, test_results = expr.runTests(sorted(tests, key=len), failureTests=is_fail, **suppress_results)
+            # filter_result_fn = (lambda r: isinstance(r, Exception),
+            #                     lambda r: not isinstance(r, Exception))[is_fail]
+            # print_(expr, ('FAIL', 'PASS')[success], "{1}valid tests ({0})".format(len(tests),
+            #                                                                       'in' if is_fail else ''))
+            # if not success:
+            #     all_pass = False
+            #     for test_string, result in test_results:
+            #         if filter_result_fn(result):
+            #             try:
+            #                 test_value = fn(test_string)
+            #             except ValueError as ve:
+            #                 test_value = str(ve)
+            #             print_("{0!r}: {1} {2} {3}".format(test_string, result,
+            #                                                expr.matches(test_string, parseAll=True), test_value))
+
+            success = True
+            for t in tests:
+                if expr.matches(t, parseAll=True):
+                    if is_fail:
+                        print_(t, "should fail but did not")
+                        success = False
+                else:
+                    if not is_fail:
+                        print_(t, "should not fail but did")
+                        success = False
+            print_(expr, ('FAIL', 'PASS')[success], "{1}valid tests ({0})".format(len(tests),
+                                                                                  'in' if is_fail else ''))
+            all_pass = all_pass and success
+
+        self.assertTrue(all_pass, "failed one or more numeric tests")
 
 class TokenMapTest(ParseTestCase):
     def runTest(self):
@@ -3698,6 +4037,14 @@ class ParseResultsNamesInGroupWithDictTest(ParseTestCase):
         # U = list_num.parseString(test_string)
         # self.assertTrue("LIT_NUM" not in U.LIST.LIST_VALUES, "results name retained as sub in ungrouped named result")
 
+        a, aEnd = pp.makeHTMLTags('a')
+        attrs = a.parseString("<a href='blah'>")
+        print_(attrs.dump())
+        self.assertEqual(attrs.startA.href, 'blah')
+        self.assertEqual(attrs.asDict(), {'startA': {'href': 'blah', 'tag': 'a', 'empty': False},
+                                          'href': 'blah', 'tag': 'a', 'empty': False})
+
+
 class FollowedByTest(ParseTestCase):
     def runTest(self):
         import pyparsing as pp
@@ -3806,12 +4153,78 @@ class UnicodeTests(ParseTestCase):
         self.assertEqual(result.asDict(), {u'şehir': u'İzmir', u'ülke': u'Türkiye', u'nüfus': 4279677},
                          "Failed to parse Turkish key-value pairs")
 
+
+class IndentedBlockExampleTest(ParseTestCase):
+    # Make sure example in indentedBlock docstring actually works!
+    def runTest(self):
+        from textwrap import dedent
+        from pyparsing import (Word, alphas, alphanums, indentedBlock, Optional, delimitedList, Group, Forward,
+                               nums, OneOrMore)
+        data = dedent('''
+        def A(z):
+          A1
+          B = 100
+          G = A2
+          A2
+          A3
+        B
+        def BB(a,b,c):
+          BB1
+          def BBA():
+            bba1
+            bba2
+            bba3
+        C
+        D
+        def spam(x,y):
+             def eggs(z):
+                 pass
+        ''')
+
+        indentStack = [1]
+        stmt = Forward()
+
+        identifier = Word(alphas, alphanums)
+        funcDecl = ("def" + identifier + Group("(" + Optional(delimitedList(identifier)) + ")") + ":")
+        func_body = indentedBlock(stmt, indentStack)
+        funcDef = Group(funcDecl + func_body)
+
+        rvalue = Forward()
+        funcCall = Group(identifier + "(" + Optional(delimitedList(rvalue)) + ")")
+        rvalue << (funcCall | identifier | Word(nums))
+        assignment = Group(identifier + "=" + rvalue)
+        stmt << (funcDef | assignment | identifier)
+
+        module_body = OneOrMore(stmt)
+
+        parseTree = module_body.parseString(data)
+        parseTree.pprint()
+        self.assertEqual(parseTree.asList(),
+                         [['def',
+                           'A',
+                           ['(', 'z', ')'],
+                           ':',
+                           [['A1'], [['B', '=', '100']], [['G', '=', 'A2']], ['A2'], ['A3']]],
+                          'B',
+                          ['def',
+                           'BB',
+                           ['(', 'a', 'b', 'c', ')'],
+                           ':',
+                           [['BB1'], [['def', 'BBA', ['(', ')'], ':', [['bba1'], ['bba2'], ['bba3']]]]]],
+                          'C',
+                          'D',
+                          ['def',
+                           'spam',
+                           ['(', 'x', 'y', ')'],
+                           ':',
+                           [[['def', 'eggs', ['(', 'z', ')'], ':', [['pass']]]]]]],
+                         "Failed indentedBlock example"
+                         )
+
+
 class IndentedBlockTest(ParseTestCase):
     # parse pseudo-yaml indented text
     def runTest(self):
-        if pp.ParserElement.packrat_cache:
-            print_("cannot test indentedBlock with packrat enabled")
-            return
         import textwrap
 
         EQ = pp.Suppress('=')
@@ -3823,7 +4236,7 @@ class IndentedBlockTest(ParseTestCase):
         value <<= pp.pyparsing_common.integer | pp.QuotedString("'") | compound_value
         parser = pp.Dict(pp.OneOrMore(pp.Group(key_value)))
 
-        text = """\
+        text = """
             a = 100
             b = 101
             c =
@@ -3842,6 +4255,133 @@ class IndentedBlockTest(ParseTestCase):
         self.assertEqual(result.c.c1,     200, "invalid indented block result")
         self.assertEqual(result.c.c2.c21, 999, "invalid indented block result")
 
+
+class IndentedBlockTest2(ParseTestCase):
+    # exercise indentedBlock with example posted in issue #87
+    def runTest(self):
+        from textwrap import dedent
+        from pyparsing import Word, alphas, alphanums, Suppress, Forward, indentedBlock, Literal, OneOrMore
+
+        indent_stack = [1]
+
+        key = Word(alphas, alphanums) + Suppress(":")
+        stmt = Forward()
+
+        suite = indentedBlock(stmt, indent_stack)
+        body = key + suite
+
+        pattern = (Word(alphas) + Suppress("(") + Word(alphas) + Suppress(")"))
+        stmt << pattern
+
+        def key_parse_action(toks):
+            print_("Parsing '%s'..." % toks[0])
+
+        key.setParseAction(key_parse_action)
+        header = Suppress("[") + Literal("test") + Suppress("]")
+        content = (header + OneOrMore(indentedBlock(body, indent_stack, False)))
+
+        contents = Forward()
+        suites = indentedBlock(content, indent_stack)
+
+        extra = Literal("extra") + Suppress(":") + suites
+        contents << (content | extra)
+
+        parser = OneOrMore(contents)
+
+        sample = dedent("""
+        extra:
+            [test]
+            one0: 
+                two (three)
+            four0:
+                five (seven)
+        extra:
+            [test]
+            one1: 
+                two (three)
+            four1:
+                five (seven)
+        """)
+
+        success, _ = parser.runTests([sample])
+        self.assertTrue(success, "Failed indentedBlock test for issue #87")
+
+
+class IndentedBlockScanTest(ParseTestCase):
+    def get_parser(self):
+        """
+        A valid statement is the word "block:", followed by an indent, followed by the letter A only, or another block
+        """
+        stack = [1]
+        block = pp.Forward()
+        body = pp.indentedBlock(pp.Literal('A') ^ block, indentStack=stack, indent=True)
+        block <<= pp.Literal('block:') + body
+        return block
+
+    def runTest(self):
+        from textwrap import dedent
+
+        # This input string is a perfect match for the parser, so a single match is found
+        p1 = self.get_parser()
+        r1 = list(p1.scanString(dedent("""\
+        block:
+            A
+        """)))
+        self.assertEqual(len(r1), 1)
+
+        # This input string is a perfect match for the parser, except for the letter B instead of A, so this will fail (and should)
+        p2 = self.get_parser()
+        r2 = list(p2.scanString(dedent("""\
+        block:
+            B
+        """)))
+        self.assertEqual(len(r2), 0)
+
+        # This input string contains both string A and string B, and it finds one match (as it should)
+        p3 = self.get_parser()
+        r3 = list(p3.scanString(dedent("""\
+        block:
+            A
+        block:
+            B
+        """)))
+        self.assertEqual(len(r3), 1)
+
+        # This input string contains both string A and string B, but in a different order.
+        p4 = self.get_parser()
+        r4 = list(p4.scanString(dedent("""\
+        block:
+            B
+        block:
+            A
+        """)))
+        self.assertEqual(len(r4), 1)
+
+        # This is the same as case 3, but with nesting
+        p5 = self.get_parser()
+        r5 = list(p5.scanString(dedent("""\
+        block:
+            block:
+                A
+        block:
+            block:
+                B
+        """)))
+        self.assertEqual(len(r5), 1)
+
+        # This is the same as case 4, but with nesting
+        p6 = self.get_parser()
+        r6 = list(p6.scanString(dedent("""\
+        block:
+            block:
+                B
+        block:
+            block:
+                A
+        """)))
+        self.assertEqual(len(r6), 1)
+
+
 class ParseResultsWithNameMatchFirst(ParseTestCase):
     def runTest(self):
         import pyparsing as pp
@@ -3854,6 +4394,25 @@ class ParseResultsWithNameMatchFirst(ParseTestCase):
         """)
         self.assertEqual(list(expr.parseString('not the bird')['rexp']), 'not the bird'.split())
         self.assertEqual(list(expr.parseString('the bird')['rexp']), 'the bird'.split())
+
+        # test compatibility mode, restoring pre-2.3.1 behavior
+        with AutoReset(pp.__compat__, "collect_all_And_tokens"):
+            pp.__compat__.collect_all_And_tokens = False
+            pp.__diag__.warn_multiple_tokens_in_named_alternation = True
+            expr_a = pp.Literal('not') + pp.Literal('the') + pp.Literal('bird')
+            expr_b = pp.Literal('the') + pp.Literal('bird')
+            if PY_3:
+                with self.assertWarns(UserWarning, msg="failed to warn of And within alternation"):
+                    expr = (expr_a | expr_b)('rexp')
+            else:
+                expr = (expr_a | expr_b)('rexp')
+            expr.runTests("""
+                not the bird
+                the bird
+            """)
+            self.assertEqual(expr.parseString('not the bird')['rexp'], 'not')
+            self.assertEqual(expr.parseString('the bird')['rexp'], 'the')
+
 
 class ParseResultsWithNameOr(ParseTestCase):
     def runTest(self):
@@ -3868,12 +4427,35 @@ class ParseResultsWithNameOr(ParseTestCase):
         self.assertEqual(list(expr.parseString('not the bird')['rexp']), 'not the bird'.split())
         self.assertEqual(list(expr.parseString('the bird')['rexp']), 'the bird'.split())
 
+        expr = (expr_a | expr_b)('rexp')
+        expr.runTests("""\
+            not the bird
+            the bird
+        """)
+        self.assertEqual(list(expr.parseString('not the bird')['rexp']), 'not the bird'.split())
+        self.assertEqual(list(expr.parseString('the bird')['rexp']), 'the bird'.split())
+
+        # test compatibility mode, restoring pre-2.3.1 behavior
+        with AutoReset(pp.__compat__, "collect_all_And_tokens"):
+            pp.__compat__.collect_all_And_tokens = False
+            pp.__diag__.warn_multiple_tokens_in_named_alternation = True
+            expr_a = pp.Literal('not') + pp.Literal('the') + pp.Literal('bird')
+            expr_b = pp.Literal('the') + pp.Literal('bird')
+            if PY_3:
+                with self.assertWarns(UserWarning, msg="failed to warn of And within alternation"):
+                    expr = (expr_a ^ expr_b)('rexp')
+            else:
+                expr = (expr_a ^ expr_b)('rexp')
+            expr.runTests("""\
+                not the bird
+                the bird
+            """)
+            self.assertEqual(expr.parseString('not the bird')['rexp'], 'not')
+            self.assertEqual(expr.parseString('the bird')['rexp'], 'the')
+
+
 class EmptyDictDoesNotRaiseException(ParseTestCase):
     def runTest(self):
-        if not PY_3:
-            print('explain() not supported in Py2')
-            return
-
         import pyparsing as pp
 
         key = pp.Word(pp.alphas)
@@ -3889,28 +4471,39 @@ class EmptyDictDoesNotRaiseException(ParseTestCase):
         try:
             print_(key_value_dict.parseString("").dump())
         except pp.ParseException as pe:
+            exc = pe
+            if not hasattr(exc, '__traceback__'):
+                # Python 2 compatibility
+                etype, value, traceback = sys.exc_info()
+                exc.__traceback__ = traceback
             print_(pp.ParseException.explain(pe))
         else:
             self.assertTrue(False, "failed to raise exception when matching empty string")
 
 class ExplainExceptionTest(ParseTestCase):
     def runTest(self):
-        if not PY_3:
-            print('explain() not supported in Py2')
-            return
-
         import pyparsing as pp
 
         expr = pp.Word(pp.nums).setName("int") + pp.Word(pp.alphas).setName("word")
         try:
             expr.parseString("123 355")
         except pp.ParseException as pe:
+            exc = pe
+            if not hasattr(exc, '__traceback__'):
+                # Python 2 compatibility
+                etype, value, traceback = sys.exc_info()
+                exc.__traceback__ = traceback
             print_(pp.ParseException.explain(pe, depth=0))
 
         expr = pp.Word(pp.nums).setName("int") - pp.Word(pp.alphas).setName("word")
         try:
             expr.parseString("123 355 (test using ErrorStop)")
         except pp.ParseSyntaxException as pe:
+            exc = pe
+            if not hasattr(exc, '__traceback__'):
+                # Python 2 compatibility
+                etype, value, traceback = sys.exc_info()
+                exc.__traceback__ = traceback
             print_(pp.ParseException.explain(pe))
 
         integer = pp.Word(pp.nums).setName("int").addParseAction(lambda t: int(t[0]))
@@ -3928,8 +4521,17 @@ class ExplainExceptionTest(ParseTestCase):
         try:
             expr.parseString("123 0")
         except pp.ParseException as pe:
+            exc = pe
+            if not hasattr(exc, '__traceback__'):
+                # Python 2 compatibility
+                etype, value, traceback = sys.exc_info()
+                exc.__traceback__ = traceback
             print_(pp.ParseException.explain(pe))
         except Exception as exc:
+            if not hasattr(exc, '__traceback__'):
+                # Python 2 compatibility
+                etype, value, traceback = sys.exc_info()
+                exc.__traceback__ = traceback
             print_(pp.ParseException.explain(exc))
             raise
 
@@ -3946,6 +4548,154 @@ class CaselessKeywordVsKeywordCaselessTest(ParseTestCase):
         clist = crule.searchString('not yes').asList()
         print_(clist)
         self.assertEqual(flist, clist, "CaselessKeyword not working the same as Keyword(caseless=True)")
+
+
+class OneOfKeywordsTest(ParseTestCase):
+    def runTest(self):
+        import pyparsing as pp
+
+        literal_expr = pp.oneOf("a b c")
+        success, _ = literal_expr[...].runTests("""
+            # literal oneOf tests
+            a b c
+            a a a
+            abc
+        """)
+        self.assertTrue(success, "failed literal oneOf matching")
+
+        keyword_expr = pp.oneOf("a b c", asKeyword=True)
+        success, _ = keyword_expr[...].runTests("""
+            # keyword oneOf tests
+            a b c
+            a a a
+        """)
+        self.assertTrue(success, "failed keyword oneOf matching")
+
+        success, _ = keyword_expr[...].runTests("""
+            # keyword oneOf failure tests
+            abc
+        """, failureTests=True)
+        self.assertTrue(success, "failed keyword oneOf failure tests")
+
+
+class WarnUngroupedNamedTokensTest(ParseTestCase):
+    """
+     - warn_ungrouped_named_tokens_in_collection - flag to enable warnings when a results
+       name is defined on a containing expression with ungrouped subexpressions that also
+       have results names (default=True)
+    """
+    def runTest(self):
+        import pyparsing as pp
+        ppc = pp.pyparsing_common
+
+        pp.__diag__.warn_ungrouped_named_tokens_in_collection = True
+
+        COMMA = pp.Suppress(',').setName("comma")
+        coord = (ppc.integer('x') + COMMA + ppc.integer('y'))
+
+        # this should emit a warning
+        if PY_3:
+            with self.assertWarns(UserWarning, msg="failed to warn with named repetition of"
+                                                   " ungrouped named expressions"):
+                path = coord[...].setResultsName('path')
+
+
+class WarnNameSetOnEmptyForwardTest(ParseTestCase):
+    """
+     - warn_name_set_on_empty_Forward - flag to enable warnings whan a Forward is defined
+       with a results name, but has no contents defined (default=False)
+    """
+    def runTest(self):
+        import pyparsing as pp
+
+        pp.__diag__.warn_name_set_on_empty_Forward = True
+
+        base = pp.Forward()
+
+        if PY_3:
+            with self.assertWarns(UserWarning, msg="failed to warn when naming an empty Forward expression"):
+                base("x")
+
+
+class WarnOnMultipleStringArgsToOneOfTest(ParseTestCase):
+    """
+     - warn_on_multiple_string_args_to_oneof - flag to enable warnings whan oneOf is
+       incorrectly called with multiple str arguments (default=True)
+    """
+    def runTest(self):
+        import pyparsing as pp
+
+        pp.__diag__.warn_on_multiple_string_args_to_oneof = True
+
+        if PY_3:
+            with self.assertWarns(UserWarning, msg="failed to warn when incorrectly calling oneOf(string, string)"):
+                a = pp.oneOf('A', 'B')
+
+
+class EnableDebugOnNamedExpressionsTest(ParseTestCase):
+    """
+     - enable_debug_on_named_expressions - flag to auto-enable debug on all subsequent
+       calls to ParserElement.setName() (default=False)
+    """
+    def runTest(self):
+        import pyparsing as pp
+        import textwrap
+
+        test_stdout = StringIO()
+
+        with AutoReset(sys, 'stdout', 'stderr'):
+            sys.stdout = test_stdout
+            sys.stderr = test_stdout
+
+            pp.__diag__.enable_debug_on_named_expressions = True
+            integer = pp.Word(pp.nums).setName('integer')
+
+            integer[...].parseString("1 2 3")
+
+        expected_debug_output = textwrap.dedent("""\
+            Match integer at loc 0(1,1)
+            Matched integer -> ['1']
+            Match integer at loc 1(1,2)
+            Matched integer -> ['2']
+            Match integer at loc 3(1,4)
+            Matched integer -> ['3']
+            Match integer at loc 5(1,6)
+            Exception raised:Expected integer, found end of text  (at char 5), (line:1, col:6)
+            """)
+        output = test_stdout.getvalue()
+        print_(output)
+        self.assertEquals(output,
+                          expected_debug_output,
+                          "failed to auto-enable debug on named expressions "
+                          "using enable_debug_on_named_expressions")
+
+
+class UndesirableButCommonPracticesTest(ParseTestCase):
+    def runTest(self):
+        import pyparsing as pp
+        ppc = pp.pyparsing_common
+
+        # While these are valid constructs, and they are not encouraged
+        # there is apparently a lot of code out there using these
+        # coding styles.
+        #
+        # Even though they are not encouraged, we shouldn't break them.
+
+        # Create an And using a list of expressions instead of using '+' operator
+        expr = pp.And([pp.Word('abc'), pp.Word('123')])
+        expr.runTests("""
+            aaa 333
+            b 1
+            ababab 32123
+        """)
+
+        # Passing a single expression to a ParseExpression, when it really wants a sequence
+        expr = pp.Or(pp.Or(ppc.integer))
+        expr.runTests("""
+            123
+            456
+            abc
+        """)
 
 
 class MiscellaneousParserTests(ParseTestCase):
@@ -4188,9 +4938,11 @@ def makeTestSuiteTemp(classes):
     suite.addTests(cls() for cls in classes)
     return suite
 
-if __name__ == '__main__':
+# runnable from setup.py using "python setup.py test -s unitTests.suite"
+suite = makeTestSuite()
 
-    testRunner = TextTestRunner()
+
+if __name__ == '__main__':
 
     # run specific tests by including them in this list, otherwise
     # all tests will be run
@@ -4198,7 +4950,12 @@ if __name__ == '__main__':
         ]
 
     if not testclasses:
-        testRunner.run(makeTestSuite())
+        testRunner = TextTestRunner()
+        result = testRunner.run(suite)
     else:
+        # disable chaser '.' display
+        testRunner = TextTestRunner(verbosity=0)
         BUFFER_OUTPUT = False
-        testRunner.run(makeTestSuiteTemp(testclasses))
+        result = testRunner.run(makeTestSuiteTemp(testclasses))
+
+    exit(0 if result.wasSuccessful() else 1)
