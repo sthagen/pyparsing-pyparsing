@@ -59,7 +59,7 @@ or any other greeting of the form "<salutation>, <addressee>!"::
 
     greet = Word(alphas) + "," + Word(alphas) + "!"
     greeting = greet.parseString("Hello, World!")
-    print greeting
+    print(greeting)
 
 The parsed tokens are returned in the following form::
 
@@ -691,10 +691,10 @@ Exception classes and Troubleshooting
   ParseExceptions have attributes loc, msg, line, lineno, and column; to view the
   text line and location where the reported ParseException occurs, use::
 
-    except ParseException, err:
-        print err.line
-        print " " * (err.column - 1) + "^"
-        print err
+    except ParseException as err:
+        print(err.line)
+        print(" " * (err.column - 1) + "^")
+        print(err)
 
 - ``RecursiveGrammarException`` - exception returned by ``validate()`` if
   the grammar contains a recursive infinite loop, such as::
@@ -821,7 +821,7 @@ Helper methods
 
   If an expression is not provided for the content argument, the nested
   expression will capture all whitespace-delimited content between delimiters
-vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv  as a list of separate values.
+  as a list of separate values.
 
   Use the ignoreExpr argument to define expressions that may contain
   opening or closing characters that should not be treated as opening
