@@ -27,12 +27,9 @@ from pyparsing.exceptions import *
 from pyparsing.actions import *
 from pyparsing.results import ParseResults, _ParseResultsWithOffset
 
-system_version = tuple(sys.version_info)[:3]
 _MAX_INT = sys.maxsize
 str_type = (str, bytes)
 
-# -*- coding: utf-8 -*-
-# module pyparsing.py
 #
 # Copyright (c) 2003-2019  Paul T. McGuire
 #
@@ -57,7 +54,7 @@ str_type = (str, bytes)
 #
 
 __version__ = "3.0.0a1"
-__versionTime__ = "27 Jan 2020 00:56 UTC"
+__versionTime__ = "24 Feb 2020 02:17 UTC"
 __author__ = "Paul McGuire <ptmcg@users.sourceforge.net>"
 
 
@@ -243,7 +240,7 @@ def nullDebugAction(*args):
     pass
 
 
-class ParserElement(object):
+class ParserElement:
     """Abstract base level parser element class."""
 
     DEFAULT_WHITE_CHARS = " \n\t\r"
@@ -1085,7 +1082,7 @@ class ParserElement(object):
     def __mul__(self, other):
         """
         Implementation of * operator, allows use of ``expr * 3`` in place of
-        ``expr + expr + expr``.  Expressions may also me multiplied by a 2-integer
+        ``expr + expr + expr``.  Expressions may also be multiplied by a 2-integer
         tuple, similar to ``{min, max}`` multipliers in regular expressions.  Tuples
         may also include ``None`` as in:
          - ``expr*(n, None)`` or ``expr*(n, )`` is equivalent
@@ -2330,7 +2327,7 @@ class Regex(Token):
         self.name = str(self)
         self.errmsg = "Expected " + self.name
         self.mayIndexError = False
-        self.mayReturnEmpty = True
+        self.mayReturnEmpty = self.re_match("") is not None
         self.asGroupList = asGroupList
         self.asMatch = asMatch
         if self.asGroupList:
@@ -3533,7 +3530,7 @@ class Each(ParseExpression):
             opt2 = [
                 e
                 for e in self.exprs
-                if e.mayReturnEmpty and not isinstance(e, Optional)
+                if e.mayReturnEmpty and not isinstance(e, (Optional, Regex))
             ]
             self.optionals = opt1 + opt2
             self.multioptionals = [
@@ -3999,7 +3996,7 @@ class ZeroOrMore(_MultipleMatch):
         return self.strRepr
 
 
-class _NullToken(object):
+class _NullToken:
     def __bool__(self):
         return False
 
@@ -4513,7 +4510,7 @@ class Suppress(TokenConverter):
         return self
 
 
-class OnlyOnce(object):
+class OnlyOnce:
     """Wrapper for parse actions, to ensure they are only called once.
     """
 
