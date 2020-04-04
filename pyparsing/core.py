@@ -54,7 +54,7 @@ str_type = (str, bytes)
 #
 
 __version__ = "3.0.0a1"
-__versionTime__ = "24 Feb 2020 02:17 UTC"
+__versionTime__ = "3 Apr 2020 22:54 UTC"
 __author__ = "Paul McGuire <ptmcg@users.sourceforge.net>"
 
 
@@ -130,9 +130,12 @@ hexnums = nums + "ABCDEFabcdef"
 alphanums = alphas + nums
 printables = "".join(c for c in string.printable if c not in string.whitespace)
 
+_trim_arity_call_line = None
+
 
 def _trim_arity(func, maxargs=2):
     "decorator to trim function calls to match the arity of the target"
+    global _trim_arity_call_line
 
     if func in singleArgBuiltins:
         return lambda s, l, t: func(t)
@@ -148,11 +151,16 @@ def _trim_arity(func, maxargs=2):
     # synthesize what would be returned by traceback.extract_stack at the call to
     # user's parse action 'func', so that we don't incur call penalty at parse time
 
-    LINE_DIFF = 7
+    LINE_DIFF = 11
     # IF ANY CODE CHANGES, EVEN JUST COMMENTS OR BLANK LINES, BETWEEN THE NEXT LINE AND
     # THE CALL TO FUNC INSIDE WRAPPER, LINE_DIFF MUST BE MODIFIED!!!!
-    this_line = traceback.extract_stack(limit=2)[-1]
-    pa_call_line_synth = (this_line[0], this_line[1] + LINE_DIFF)
+    _trim_arity_call_line = (
+        _trim_arity_call_line or traceback.extract_stack(limit=2)[-1]
+    )
+    pa_call_line_synth = (
+        _trim_arity_call_line[0],
+        _trim_arity_call_line[1] + LINE_DIFF,
+    )
 
     def wrapper(*args):
         nonlocal found_arity, limit
@@ -161,25 +169,23 @@ def _trim_arity(func, maxargs=2):
                 ret = func(*args[limit:])
                 found_arity = True
                 return ret
-            except TypeError:
+            except TypeError as te:
                 # re-raise TypeErrors if they did not come from our arity testing
                 if found_arity:
                     raise
                 else:
-                    try:
-                        tb = sys.exc_info()[-1]
-                        if not extract_tb(tb, limit=2)[-1][:2] == pa_call_line_synth:
-                            raise
-                    finally:
-                        try:
-                            del tb
-                        except NameError:
-                            pass
+                    tb = te.__traceback__
+                    trim_arity_type_error = (
+                        extract_tb(tb, limit=2)[-1][:2] == pa_call_line_synth
+                    )
+                    del tb
 
-                if limit <= maxargs:
-                    limit += 1
-                    continue
-                raise
+                    if trim_arity_type_error:
+                        if limit <= maxargs:
+                            limit += 1
+                            continue
+
+                    raise
 
     # copy func name to wrapper for sensible debug output
     func_name = "<parse action>"
@@ -200,8 +206,10 @@ def conditionAsParseAction(fn, message=None, fatal=False):
     to an operator level in infixNotation).
 
     Optional keyword arguments:
+
     - message = define a custom message to be used in the raised exception
     - fatal = if True, will raise ParseFatalException to stop parsing immediately; otherwise will raise ParseException
+
     """
     msg = message if message is not None else "failed user-defined condition"
     exc_type = ParseFatalException if fatal else ParseException
@@ -434,10 +442,11 @@ class ParserElement:
         expression are cleared.
 
         Optional keyword arguments:
+
         - callDuringTry = (default= ``False``) indicate if parse action should be run during lookaheads and alternate testing
 
         Note: the default parsing behavior is to expand tabs in the input string
-        before starting the parsing process.  See :class:`parseString for more
+        before starting the parsing process.  See :class:`parseString` for more
         information on parsing strings containing ``<TAB>`` s, and suggested
         methods to maintain a consistent view of the parsed string, the parse
         location, and line and column positions within the parsed string.
@@ -483,6 +492,7 @@ class ParserElement:
         functions passed to ``addCondition`` need to return boolean success/fail of the condition.
 
         Optional keyword arguments:
+
         - message = define a custom message to be used in the raised exception
         - fatal = if True, will raise ParseFatalException to stop parsing immediately; otherwise will raise
           ParseException
@@ -513,10 +523,12 @@ class ParserElement:
         """Define action to perform if parsing fails at this expression.
            Fail acton fn is a callable function that takes the arguments
            ``fn(s, loc, expr, err)`` where:
+
            - s = string being parsed
            - loc = location where expression match was attempted and failed
            - expr = the parse expression that failed
            - err = the exception thrown
+
            The function returns no value.  It may throw :class:`ParseFatalException`
            if it is desired to stop parsing immediately."""
         self.failAction = fn
@@ -754,7 +766,7 @@ class ParserElement:
         :returns: the parsed data as a :class:`ParseResults` object, which may be accessed as a `list`, a `dict`, or
           an object with attributes if the given parser includes results names.
 
-        If the input string is required to match the entire grammar, ``parseAll`` flag must be set to True. This
+        If the input string is required to match the entire grammar, ``parseAll`` flag must be set to ``True``. This
         is also equivalent to ending the grammar with ``StringEnd()``.
 
         To report proper column numbers, ``parseString`` operates on a copy of the input string where all tabs are
@@ -1355,7 +1367,7 @@ class ParserElement:
 
     def parseWithTabs(self):
         """
-        Overrides default behavior to expand ``<TAB>``s to spaces before parsing the input string.
+        Overrides default behavior to expand ``<TAB>`` s to spaces before parsing the input string.
         Must be called before ``parseString`` when the input grammar contains elements that
         match ``<TAB>`` characters.
         """
@@ -1371,10 +1383,12 @@ class ParserElement:
         Example::
 
             patt = OneOrMore(Word(alphas))
-            patt.parseString('ablaj /* comment */ lskjd') # -> ['ablaj']
+            patt.parseString('ablaj /* comment */ lskjd')
+            # -> ['ablaj']
 
             patt.ignore(cStyleComment)
-            patt.parseString('ablaj /* comment */ lskjd') # -> ['ablaj', 'lskjd']
+            patt.parseString('ablaj /* comment */ lskjd')
+            # -> ['ablaj', 'lskjd']
         """
         if isinstance(other, str_type):
             other = Suppress(other)
@@ -1544,15 +1558,15 @@ class ParserElement:
          - tests - a list of separate test strings, or a multiline string of test strings
          - parseAll - (default= ``True``) - flag to pass to :class:`parseString` when running tests
          - comment - (default= ``'#'``) - expression for indicating embedded comments in the test
-              string; pass None to disable comment filtering
+           string; pass None to disable comment filtering
          - fullDump - (default= ``True``) - dump results as list followed by results names in nested outline;
-              if False, only dump nested list
+           if False, only dump nested list
          - printResults - (default= ``True``) prints test output to stdout
          - failureTests - (default= ``False``) indicates if these tests are expected to fail parsing
          - postParse - (default= ``None``) optional callback for successful parse results; called as
-              `fn(test_string, parse_results)` and returns a string to be added to the test output
-         - file - (default=``None``) optional file-like object to which test output will be written;
-              if None, will default to ``sys.stdout``
+           `fn(test_string, parse_results)` and returns a string to be added to the test output
+         - file - (default= ``None``) optional file-like object to which test output will be written;
+           if None, will default to ``sys.stdout``
 
         Returns: a (success, results) tuple, where success indicates that all tests succeeded
         (or failed if ``failureTests`` is True), and the results contain a list of lines of each
@@ -1626,7 +1640,7 @@ class ParserElement:
 
             expr.runTest(r"this is a test\\n of strings that spans \\n 3 lines")
 
-        (Note that this is a raw string literal, you must include the leading 'r'.)
+        (Note that this is a raw string literal, you must include the leading ``'r'``.)
         """
         if isinstance(tests, str_type):
             tests = list(map(type(tests).strip, tests.rstrip().splitlines()))
@@ -1647,7 +1661,7 @@ class ParserElement:
                 continue
             if not t:
                 continue
-            out = ["\n".join(comments), t]
+            out = ["\n" + "\n".join(comments) if comments else "", t]
             comments = []
             try:
                 # convert newline marks to actual newlines, and strip leading BOM if present
@@ -1872,7 +1886,7 @@ class Keyword(Token):
                 stacklevel=2,
             )
         self.name = '"%s"' % self.match
-        self.errmsg = "Expected " + self.name
+        self.errmsg = "Expected {} {}".format(type(self).__name__, self.name)
         self.mayReturnEmpty = False
         self.mayIndexError = False
         self.caseless = caseless
@@ -1882,30 +1896,51 @@ class Keyword(Token):
         self.identChars = set(identChars)
 
     def parseImpl(self, instring, loc, doActions=True):
+        errmsg = self.errmsg
+        errloc = loc
         if self.caseless:
-            if (
-                (instring[loc : loc + self.matchLen].upper() == self.caselessmatch)
-                and (
-                    loc >= len(instring) - self.matchLen
-                    or instring[loc + self.matchLen].upper() not in self.identChars
-                )
-                and (loc == 0 or instring[loc - 1].upper() not in self.identChars)
-            ):
-                return loc + self.matchLen, self.match
+            if instring[loc : loc + self.matchLen].upper() == self.caselessmatch:
+                if loc == 0 or instring[loc - 1].upper() not in self.identChars:
+                    if (
+                        loc >= len(instring) - self.matchLen
+                        or instring[loc + self.matchLen].upper() not in self.identChars
+                    ):
+                        return loc + self.matchLen, self.match
+                    else:
+                        # followed by keyword char
+                        errmsg += ", was immediately followed by keyword character"
+                        errloc = loc + self.matchLen
+                else:
+                    # preceded by keyword char
+                    errmsg += ", keyword was immediately preceded by keyword character"
+                    errloc = loc - 1
+            # else no match just raise plain exception
 
         else:
-            if instring[loc] == self.firstMatchChar:
-                if (
-                    (self.matchLen == 1 or instring.startswith(self.match, loc))
-                    and (
+            if (
+                instring[loc] == self.firstMatchChar
+                and self.matchLen == 1
+                or instring.startswith(self.match, loc)
+            ):
+                if loc == 0 or instring[loc - 1] not in self.identChars:
+                    if (
                         loc >= len(instring) - self.matchLen
                         or instring[loc + self.matchLen] not in self.identChars
-                    )
-                    and (loc == 0 or instring[loc - 1] not in self.identChars)
-                ):
-                    return loc + self.matchLen, self.match
+                    ):
+                        return loc + self.matchLen, self.match
+                    else:
+                        # followed by keyword char
+                        errmsg += (
+                            ", keyword was immediately followed by keyword character"
+                        )
+                        errloc = loc + self.matchLen
+                else:
+                    # preceded by keyword char
+                    errmsg += ", keyword was immediately preceded by keyword character"
+                    errloc = loc - 1
+            # else no match just raise plain exception
 
-        raise ParseException(instring, loc, self.errmsg, self)
+        raise ParseException(instring, errloc, errmsg, self)
 
     def copy(self):
         c = super().copy()
@@ -1926,7 +1961,8 @@ class CaselessLiteral(Literal):
 
     Example::
 
-        OneOrMore(CaselessLiteral("CMD")).parseString("cmd CMD Cmd10") # -> ['CMD', 'CMD', 'CMD']
+        OneOrMore(CaselessLiteral("CMD")).parseString("cmd CMD Cmd10")
+        # -> ['CMD', 'CMD', 'CMD']
 
     (Contrast with example for :class:`CaselessKeyword`.)
     """
@@ -1950,7 +1986,8 @@ class CaselessKeyword(Keyword):
 
     Example::
 
-        OneOrMore(CaselessKeyword("CMD")).parseString("cmd CMD Cmd10") # -> ['CMD', 'CMD']
+        OneOrMore(CaselessKeyword("CMD")).parseString("cmd CMD Cmd10")
+        # -> ['CMD', 'CMD']
 
     (Contrast with example for :class:`CaselessLiteral`.)
     """
@@ -2048,7 +2085,7 @@ class Word(Token):
     two characters, for instance.
 
     :class:`srange` is useful for defining custom character set strings
-    for defining ``Word`` expressions, using range notation from
+    for defining :class:`Word` expressions, using range notation from
     regular expression character sets.
 
     A common mistake is to use :class:`Word` to match a specific literal
@@ -2253,7 +2290,7 @@ class Regex(Token):
     expression. Defined with string specifying the regular expression in
     a form recognized by the stdlib Python  `re module <https://docs.python.org/3/library/re.html>`_.
     If the given regex contains named groups (defined using ``(?P<name>...)``),
-    these will be preserved as named parse results.
+    these will be preserved as named :class:`ParseResults`.
 
     If instead of the Python stdlib re module you wish to use a different RE module
     (such as the `regex` module), you can replace it by either building your
@@ -2379,7 +2416,7 @@ class Regex(Token):
 
     def sub(self, repl):
         r"""
-        Return Regex with an attached parse action to transform the parsed
+        Return :class:`Regex` with an attached parse action to transform the parsed
         result as if called using `re.sub(expr, repl, string) <https://docs.python.org/3/library/re.html#re.sub>`_.
 
         Example::
@@ -2892,9 +2929,9 @@ class StringEnd(_PositionToken):
 
 
 class WordStart(_PositionToken):
-    """Matches if the current position is at the beginning of a Word,
-    and is not preceded by any character in a given set of
-    ``wordChars`` (default= ``printables``). To emulate the
+    """Matches if the current position is at the beginning of a
+    :class:`Word`, and is not preceded by any character in a given
+    set of ``wordChars`` (default= ``printables``). To emulate the
     ``\b`` behavior of regular expressions, use
     ``WordStart(alphanums)``. ``WordStart`` will also match at
     the beginning of the string being parsed, or at the beginning of
@@ -2917,8 +2954,8 @@ class WordStart(_PositionToken):
 
 
 class WordEnd(_PositionToken):
-    """Matches if the current position is at the end of a Word, and is
-    not followed by any character in a given set of ``wordChars``
+    """Matches if the current position is at the end of a :class:`Word`,
+    and is not followed by any character in a given set of ``wordChars``
     (default= ``printables``). To emulate the ``\b`` behavior of
     regular expressions, use ``WordEnd(alphanums)``. ``WordEnd``
     will also match at the end of the string being parsed, or at the end
@@ -3100,6 +3137,7 @@ class And(ParseExpression):
             self.leaveWhitespace()
 
     def __init__(self, exprs, savelist=True):
+        exprs = list(exprs)
         if exprs and Ellipsis in exprs:
             tmp = []
             for i, expr in enumerate(exprs):
@@ -3755,10 +3793,11 @@ class PrecededBy(ParseElementEnhance):
      - retreat - (default= ``None``) - (int) maximum number of characters
        to lookbehind prior to the current parse location
 
-    If the lookbehind expression is a string, Literal, Keyword, or
-    a Word or CharsNotIn with a specified exact or maximum length, then
-    the retreat parameter is not required. Otherwise, retreat must be
-    specified to give a maximum number of characters to look back from
+    If the lookbehind expression is a string, :class:`Literal`,
+    :class:`Keyword`, or a :class:`Word` or :class:`CharsNotIn`
+    with a specified exact or maximum length, then the retreat
+    parameter is not required. Otherwise, retreat must be specified to
+    give a maximum number of characters to look back from
     the current parse position for a lookbehind match.
 
     Example::
@@ -3824,7 +3863,7 @@ class NotAny(ParseElementEnhance):
     input string, it only verifies that the specified parse expression
     does *not* match at the current position.  Also, ``NotAny`` does
     *not* skip over leading whitespace. ``NotAny`` always returns
-    a null token list.  May be constructed using the '~' operator.
+    a null token list.  May be constructed using the ``'~'`` operator.
 
     Example::
 
@@ -3970,8 +4009,8 @@ class ZeroOrMore(_MultipleMatch):
     Parameters:
      - expr - expression that must match zero or more times
      - stopOn - (default= ``None``) - expression for a terminating sentinel
-          (only required if the sentinel would ordinarily match the repetition
-          expression)
+       (only required if the sentinel would ordinarily match the repetition
+       expression)
 
     Example: similar to :class:`OneOrMore`
     """
@@ -4081,12 +4120,12 @@ class SkipTo(ParseElementEnhance):
     Parameters:
      - expr - target expression marking the end of the data to be skipped
      - include - (default= ``False``) if True, the target expression is also parsed
-          (the skipped text and target expression are returned as a 2-element list).
+       (the skipped text and target expression are returned as a 2-element list).
      - ignore - (default= ``None``) used to define grammars (typically quoted strings and
-          comments) that might contain false matches to the target expression
+       comments) that might contain false matches to the target expression
      - failOn - (default= ``None``) define expressions that are not allowed to be
-          included in the skipped test; if found before the target expression is found,
-          the SkipTo is not a match
+       included in the skipped test; if found before the target expression is found,
+       the SkipTo is not a match
 
     Example::
 
@@ -4202,12 +4241,12 @@ class Forward(ParseElementEnhance):
     """Forward declaration of an expression to be defined later -
     used for recursive grammars, such as algebraic infix notation.
     When the expression is known, it is assigned to the ``Forward``
-    variable using the '<<' operator.
+    variable using the ``'<<'`` operator.
 
     Note: take care when assigning to ``Forward`` not to overlook
     precedence of operators.
 
-    Specifically, '|' has a lower precedence than '<<', so that::
+    Specifically, ``'|'`` has a lower precedence than ``'<<'``, so that::
 
         fwdExpr << a | b | c
 
@@ -4220,7 +4259,7 @@ class Forward(ParseElementEnhance):
 
         fwdExpr << (a | b | c)
 
-    Converting to use the '<<=' operator instead will avoid this problem.
+    Converting to use the ``'<<='`` operator instead will avoid this problem.
 
     See :class:`ParseResults.pprint` for an example of a recursive
     parser created using ``Forward``.
@@ -4395,10 +4434,12 @@ class Group(TokenConverter):
         num = Word(nums)
         term = ident | num
         func = ident + Optional(delimitedList(term))
-        print(func.parseString("fn a, b, 100"))  # -> ['fn', 'a', 'b', '100']
+        print(func.parseString("fn a, b, 100"))
+        # -> ['fn', 'a', 'b', '100']
 
         func = ident + Group(Optional(delimitedList(term)))
-        print(func.parseString("fn a, b, 100"))  # -> ['fn', ['a', 'b', '100']]
+        print(func.parseString("fn a, b, 100"))
+        # -> ['fn', ['a', 'b', '100']]
     """
 
     def __init__(self, expr):
@@ -4523,9 +4564,12 @@ class OnlyOnce:
             results = self.callable(s, l, t)
             self.called = True
             return results
-        raise ParseException(s, l, "")
+        raise ParseException(s, l, "OnlyOnce obj called multiple times w/out reset")
 
     def reset(self):
+        """Allow the associated parse action to be called once more.
+        """
+
         self.called = False
 
 
@@ -4608,7 +4652,7 @@ _reBracketExpr = (
 
 
 def srange(s):
-    r"""Helper to easily define string ranges for use in Word
+    r"""Helper to easily define string ranges for use in :class:`Word`
     construction. Borrows syntax from regexp '[]' string range
     definitions::
 

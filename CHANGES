@@ -38,6 +38,17 @@ Version 3.0.0a1
   <https://github.com/pypa/setuptools/issues/1684>). To run the Pyparsing test,
   use the command `tox`.
 
+- API CHANGE:
+  The staticmethod `ParseException.explain` has been moved to
+  `ParseBaseException.explain_exception`, and a new `explain` instance
+  method added to ParseBaseException. This will make calls to `explain`
+  much more natural:
+
+      try:
+          expr.parseString("...")
+      except ParseException as pe:
+          print(pe.explain())
+
 - POTENTIAL API CHANGE:
   ZeroOrMore expressions that have results names will now
   include empty lists for their name if no matches are found.
@@ -113,6 +124,11 @@ Version 3.0.0a1
   - reset_pyparsing_context context manager, to restore pyparsing
     config settings
 
+- Enhanced error messages and error locations when parsing fails on
+  the Keyword or CaselessKeyword classes due to the presence of a
+  preceding or trailing keyword character. Surfaced while
+  working with metaperl on issue #201.
+
 - Enhanced the Regex class to be compatible with re's compiled with the
   re-equivalent regex module. Individual expressions can be built with
   regex compiled expressions using:
@@ -162,6 +178,16 @@ Version 3.0.0a1
 
 - Fixed bug in delta_time.py example, when using a quantity
   of seconds/minutes/hours/days > 999.
+
+- Fixed bug in regex definitions for real and sci_real expressions in
+  pyparsing_common. Issue #194, reported by Michael Wayne Goodman, thanks!
+
+- Fixed FutureWarning raised beginning in Python 3.7 for Regex expressions
+  containing '[' within a regex set.
+
+- Minor reformatting of output from runTests to make embedded
+  comments more visible.
+
 
 Version 2.4.6 - December, 2019
 ------------------------------
