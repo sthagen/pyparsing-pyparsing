@@ -2,8 +2,16 @@
 Change Log
 ==========
 
-Version 3.0.0a1
+Version 3.0.0a2
 ---------------
+- Fixed bug in ParseResults repr() which showed all matching
+  entries for a results name, even if listAllMatches was set
+  to False when creating the ParseResults originally. Reported
+  by Nicholas42 on GitHub, good catch! (Issue #205)
+
+
+Version 3.0.0a1 - April, 2020
+-----------------------------
 - Removed Py2.x support and other deprecated features. Pyparsing
   now requires Python 3.5 or later. If you are using an earlier
   version of Python, you must use a Pyparsing 2.4.x version
@@ -187,6 +195,25 @@ Version 3.0.0a1
 
 - Minor reformatting of output from runTests to make embedded
   comments more visible.
+
+- And finally, many thanks to those who helped in the restructuring
+  of the pyparsing code base as part of this release. Pyparsing now
+  has more standard package structure, more standard unit tests,
+  and more standard code formatting (using black). Special thanks
+  to jdufresne, klahnakoski, mattcarmody, and ckeygusuz, to name just
+  a few.
+
+
+Version 2.4.7 - March, 2020 (April, actually)
+---------------------------------------------
+- Backport of selected fixes from 3.0.0 work:
+  . Each bug with Regex expressions
+  . And expressions not properly constructing with generator
+  . Traceback abbreviation
+  . Bug in delta_time example
+  . Fix regexen in pyparsing_common.real and .sci_real
+  . Avoid FutureWarning on Python 3.7 or later
+  . Cleanup output in runTests if comments are embedded in test string
 
 
 Version 2.4.6 - December, 2019

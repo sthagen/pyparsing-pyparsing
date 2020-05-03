@@ -94,8 +94,8 @@ classes inherit from. Use the docstrings for examples of how to:
    namespace class
 """
 
-__version__ = "3.0.0a1"
-__versionTime__ = "05 Jan 2020 02:35 UTC"
+__version__ = "3.0.0a2"
+__versionTime__ = "10 Apr 2020 21:46 UTC"
 __author__ = "Paul McGuire <ptmcg@users.sourceforge.net>"
 
 from pyparsing.util import *
