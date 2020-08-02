@@ -1,7 +1,7 @@
 # exceptions.py
 
 import sys
-from pyparsing.util import col, line, lineno
+from .util import col, line, lineno
 
 
 class ParseBaseException(Exception):
@@ -36,11 +36,6 @@ class ParseBaseException(Exception):
 
         Returns a multi-line string listing the ParserElements and/or function names in the
         exception's stack trace.
-
-        Note: the diagnostic output will include string representations of the expressions
-        that failed to parse. These representations will be more helpful if you use `setName` to
-        give identifiable names to your expressions. Otherwise they will use the default string
-        forms, which may be cryptic to read.
         """
         import inspect
         from .core import ParserElement
@@ -63,9 +58,9 @@ class ParseBaseException(Exception):
                 if isinstance(f_self, ParserElement):
                     if frm.f_code.co_name not in ("parseImpl", "_parseNoCache"):
                         continue
-                    if f_self in seen:
+                    if id(f_self) in seen:
                         continue
-                    seen.add(f_self)
+                    seen.add(id(f_self))
 
                     self_type = type(f_self)
                     ret.append(
@@ -101,9 +96,9 @@ class ParseBaseException(Exception):
 
     def __getattr__(self, aname):
         """supported attributes by name are:
-           - lineno - returns the line number of the exception text
-           - col - returns the column number of the exception text
-           - line - returns the line containing the exception text
+            - lineno - returns the line number of the exception text
+            - col - returns the column number of the exception text
+            - line - returns the line containing the exception text
         """
         if aname == "lineno":
             return lineno(self.loc, self.pstr)
@@ -124,12 +119,8 @@ class ParseBaseException(Exception):
                 )
         else:
             foundstr = ""
-        return "%s%s  (at char %d), (line:%d, col:%d)" % (
-            self.msg,
-            foundstr,
-            self.loc,
-            self.lineno,
-            self.column,
+        return "{}{}  (at char {}), (line:{}, col:{})".format(
+            self.msg, foundstr, self.loc, self.lineno, self.column
         )
 
     def __repr__(self):
@@ -163,6 +154,29 @@ class ParseBaseException(Exception):
 
         Returns a multi-line string listing the ParserElements and/or function names in the
         exception's stack trace.
+
+        Example::
+
+            expr = pp.Word(pp.nums) * 3
+            try:
+                expr.parseString("123 456 A789")
+            except pp.ParseException as pe:
+                print(pe.explain(depth=0))
+
+        prints::
+
+            123 456 A789
+                    ^
+            ParseException: Expected W:(0-9), found 'A'  (at char 8), (line:1, col:9)
+
+        Note: the diagnostic output will include string representations of the expressions
+        that failed to parse. These representations will be more helpful if you use `setName` to
+        give identifiable names to your expressions. Otherwise they will use the default string
+        forms, which may be cryptic to read.
+
+        Note: pyparsing's default truncation of exception tracebacks may also truncate the
+        stack of expressions that are displayed in the ``explain`` output. To get the full listing
+        of parser expressions, you may have to set ``ParserElement.verbose_stacktrace = True``
         """
         return self.explain_exception(self, depth)
 
@@ -171,9 +185,9 @@ class ParseException(ParseBaseException):
     """
     Exception thrown when parse expressions don't match class;
     supported attributes by name are:
-    - lineno - returns the line number of the exception text
-    - col - returns the column number of the exception text
-    - line - returns the line containing the exception text
+     - lineno - returns the line number of the exception text
+     - col - returns the column number of the exception text
+     - line - returns the line containing the exception text
 
     Example::
 
@@ -195,8 +209,6 @@ class ParseFatalException(ParseBaseException):
     """user-throwable exception thrown when inconsistent parse content
        is found; stops all parsing immediately"""
 
-    pass
-
 
 class ParseSyntaxException(ParseFatalException):
     """just like :class:`ParseFatalException`, but thrown internally
@@ -204,8 +216,6 @@ class ParseSyntaxException(ParseFatalException):
     that parsing is to stop immediately because an unbacktrackable
     syntax error has been found.
     """
-
-    pass
 
 
 # ~ class ReparseException(ParseBaseException):
@@ -231,4 +241,4 @@ class RecursiveGrammarException(Exception):
         self.parseElementTrace = parseElementList
 
     def __str__(self):
-        return "RecursiveGrammarException: %s" % self.parseElementTrace
+        return "RecursiveGrammarException: {}".format(self.parseElementTrace)

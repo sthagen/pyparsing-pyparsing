@@ -1,6 +1,6 @@
 # helpers.py
-from pyparsing.core import *
-from pyparsing.util import _bslash, _flatten, _escapeRegexRangeChars
+from .core import *
+from .util import _bslash, _flatten, _escapeRegexRangeChars
 
 
 #
@@ -50,6 +50,19 @@ def countedArray(expr, intExpr=None):
         # '10' indicating that 2 values are in the array
         binaryConstant = Word('01').setParseAction(lambda t: int(t[0], 2))
         countedArray(Word(alphas), intExpr=binaryConstant).parseString('10 ab cd ef')  # -> ['ab', 'cd']
+
+        # if other fields must be parsed after the count but before the
+        # list items, give the fields results names and they will
+        # be preserved in the returned ParseResults:
+        count_with_metadata = integer + Word(alphas)("type")
+        typed_array = countedArray(Word(alphanums), intExpr=count_with_metadata)("items")
+        result = typed_array.parseString("3 bool True True False")
+        print(result.dump())
+
+        # prints
+        # ['True', 'True', 'False']
+        # - items: ['True', 'True', 'False']
+        # - type: 'bool'
     """
     arrayExpr = Forward()
 
@@ -143,16 +156,15 @@ def oneOf(strs, caseless=False, useRegex=True, asKeyword=False):
 
     Parameters:
 
-     - strs - a string of space-delimited literals, or a collection of
+     - ``strs`` - a string of space-delimited literals, or a collection of
        string literals
-     - caseless - (default= ``False``) - treat all literals as
-       caseless
-     - useRegex - (default= ``True``) - as an optimization, will
+     - ``caseless`` - treat all literals as caseless - (default= ``False``)
+     - ``useRegex`` - as an optimization, will
        generate a :class:`Regex` object; otherwise, will generate
        a :class:`MatchFirst` object (if ``caseless=True`` or ``asKeyword=True``, or if
-       creating a :class:`Regex` raises an exception)
-     - asKeyword - (default= ``False``) - enforce :class:`Keyword`-style matching on the
-       generated expressions
+       creating a :class:`Regex` raises an exception) - (default= ``True``)
+     - ``asKeyword`` - enforce :class:`Keyword`-style matching on the
+       generated expressions - (default= ``False``)
 
     Example::
 
@@ -336,9 +348,9 @@ def locatedExpr(expr):
 
     This helper adds the following results names:
 
-     - locn_start = location where matched expression begins
-     - locn_end = location where matched expression ends
-     - value = the actual parsed results
+     - ``locn_start`` - location where matched expression begins
+     - ``locn_end`` - location where matched expression ends
+     - ``value`` - the actual parsed results
 
     Be careful if the input text contains ``<TAB>`` characters, you
     may want to call :class:`ParserElement.parseWithTabs`
@@ -365,16 +377,16 @@ def locatedExpr(expr):
 
 def nestedExpr(opener="(", closer=")", content=None, ignoreExpr=quotedString.copy()):
     """Helper method for defining nested lists enclosed in opening and
-    closing delimiters ("(" and ")" are the default).
+    closing delimiters (``"("`` and ``")"`` are the default).
 
     Parameters:
-     - opener - opening character for a nested list
+     - ``opener`` - opening character for a nested list
        (default= ``"("``); can also be a pyparsing expression
-     - closer - closing character for a nested list
+     - ``closer`` - closing character for a nested list
        (default= ``")"``); can also be a pyparsing expression
-     - content - expression for items within the nested lists
+     - ``content`` - expression for items within the nested lists
        (default= ``None``)
-     - ignoreExpr - expression for ignoring opening and closing
+     - ``ignoreExpr`` - expression for ignoring opening and closing
        delimiters (default= :class:`quotedString`)
 
     If an expression is not provided for the content argument, the
@@ -607,30 +619,30 @@ def infixNotation(baseExpr, opList, lpar=Suppress("("), rpar=Suppress(")")):
     improve your parser performance.
 
     Parameters:
-     - baseExpr - expression representing the most basic element for the
+     - ``baseExpr`` - expression representing the most basic element for the
        nested
-     - opList - list of tuples, one for each operator precedence level
+     - ``opList`` - list of tuples, one for each operator precedence level
        in the expression grammar; each tuple is of the form ``(opExpr,
        numTerms, rightLeftAssoc, parseAction)``, where:
 
-       - opExpr is the pyparsing expression for the operator; may also
-         be a string, which will be converted to a Literal; if numTerms
-         is 3, opExpr is a tuple of two expressions, for the two
+       - ``opExpr`` is the pyparsing expression for the operator; may also
+         be a string, which will be converted to a Literal; if ``numTerms``
+         is 3, ``opExpr`` is a tuple of two expressions, for the two
          operators separating the 3 terms
-       - numTerms is the number of terms for this operator (must be 1,
+       - ``numTerms`` is the number of terms for this operator (must be 1,
          2, or 3)
-       - rightLeftAssoc is the indicator whether the operator is right
+       - ``rightLeftAssoc`` is the indicator whether the operator is right
          or left associative, using the pyparsing-defined constants
          ``opAssoc.RIGHT`` and ``opAssoc.LEFT``.
-       - parseAction is the parse action to be associated with
+       - ``parseAction`` is the parse action to be associated with
          expressions matching this operator expression (the parse action
          tuple member may be omitted); if the parse action is passed
          a tuple or list of functions, this is equivalent to calling
          ``setParseAction(*fn)``
          (:class:`ParserElement.setParseAction`)
-     - lpar - expression for matching left-parentheses
+     - ``lpar`` - expression for matching left-parentheses
        (default= ``Suppress('(')``)
-     - rpar - expression for matching right-parentheses
+     - ``rpar`` - expression for matching right-parentheses
        (default= ``Suppress(')')``)
 
     Example::
@@ -674,15 +686,22 @@ def infixNotation(baseExpr, opList, lpar=Suppress("("), rpar=Suppress(")")):
     lastExpr = baseExpr | (lpar + ret + rpar)
     for i, operDef in enumerate(opList):
         opExpr, arity, rightLeftAssoc, pa = (operDef + (None,))[:4]
-        termName = "%s term" % opExpr if arity < 3 else "%s%s term" % opExpr
         if arity == 3:
-            if opExpr is None or len(opExpr) != 2:
+            if not isinstance(opExpr, (tuple, list)) or len(opExpr) != 2:
                 raise ValueError(
                     "if numterms=3, opExpr must be a tuple or list of two expressions"
                 )
             opExpr1, opExpr2 = opExpr
+
+        if not 1 <= arity <= 3:
+            raise ValueError("operator must be unary (1), binary (2), or ternary (3)")
+
+        if rightLeftAssoc not in (opAssoc.LEFT, opAssoc.RIGHT):
+            raise ValueError("operator must indicate right or left associativity")
+
+        termName = "%s term" % opExpr if arity < 3 else "%s%s term" % opExpr
         thisExpr = Forward().setName(termName)
-        if rightLeftAssoc == opAssoc.LEFT:
+        if rightLeftAssoc is opAssoc.LEFT:
             if arity == 1:
                 matchExpr = _FB(lastExpr + opExpr) + Group(lastExpr + OneOrMore(opExpr))
             elif arity == 2:
@@ -698,11 +717,7 @@ def infixNotation(baseExpr, opList, lpar=Suppress("("), rpar=Suppress(")")):
                 matchExpr = _FB(
                     lastExpr + opExpr1 + lastExpr + opExpr2 + lastExpr
                 ) + Group(lastExpr + OneOrMore(opExpr1 + lastExpr + opExpr2 + lastExpr))
-            else:
-                raise ValueError(
-                    "operator must be unary (1), binary (2), or ternary (3)"
-                )
-        elif rightLeftAssoc == opAssoc.RIGHT:
+        elif rightLeftAssoc is opAssoc.RIGHT:
             if arity == 1:
                 # try to avoid LR with this extra test
                 if not isinstance(opExpr, Optional):
@@ -721,12 +736,6 @@ def infixNotation(baseExpr, opList, lpar=Suppress("("), rpar=Suppress(")")):
                 matchExpr = _FB(
                     lastExpr + opExpr1 + thisExpr + opExpr2 + thisExpr
                 ) + Group(lastExpr + opExpr1 + thisExpr + opExpr2 + thisExpr)
-            else:
-                raise ValueError(
-                    "operator must be unary (1), binary (2), or ternary (3)"
-                )
-        else:
-            raise ValueError("operator must indicate right or left associativity")
         if pa:
             if isinstance(pa, (tuple, list)):
                 matchExpr.setParseAction(*pa)
@@ -744,13 +753,13 @@ def indentedBlock(blockStatementExpr, indentStack, indent=True, backup_stacks=[]
 
     Parameters:
 
-     - blockStatementExpr - expression defining syntax of statement that
+     - ``blockStatementExpr`` - expression defining syntax of statement that
        is repeated within the indented block
-     - indentStack - list created by caller to manage indentation stack
-       (multiple statementWithIndentedBlock expressions within a single
-       grammar should share a common indentStack)
-     - indent - boolean indicating whether block must be indented beyond
-       the current level; set to False for block of left-most
+     - ``indentStack`` - list created by caller to manage indentation stack
+       (multiple ``statementWithIndentedBlock`` expressions within a single
+       grammar should share a common ``indentStack``)
+     - ``indent`` - boolean indicating whether block must be indented beyond
+       the current level; set to ``False`` for block of left-most
        statements (default= ``True``)
 
     A valid block must contain at least one ``blockStatement``.

@@ -17,12 +17,6 @@ class _ParseResultsWithOffset:
     def __getitem__(self, i):
         return self.tup[i]
 
-    def __repr__(self):
-        return repr(self.tup[0])
-
-    def setOffset(self, i):
-        self.tup = (self.tup[0], i)
-
     def __getstate__(self):
         return self.tup
 
@@ -42,16 +36,18 @@ class ParseResults:
 
         integer = Word(nums)
         date_str = (integer.setResultsName("year") + '/'
-                        + integer.setResultsName("month") + '/'
-                        + integer.setResultsName("day"))
+                    + integer.setResultsName("month") + '/'
+                    + integer.setResultsName("day"))
         # equivalent form:
-        # date_str = integer("year") + '/' + integer("month") + '/' + integer("day")
+        # date_str = (integer("year") + '/'
+        #             + integer("month") + '/'
+        #             + integer("day"))
 
         # parseString returns a ParseResults object
         result = date_str.parseString("1999/12/31")
 
         def test(s, fn=repr):
-            print("%s -> %s" % (s, fn(eval(s))))
+            print("{} -> {}".format(s, fn(eval(s))))
         test("list(result)")
         test("result[0]")
         test("result['month']")
@@ -208,7 +204,7 @@ class ParseResults:
         return ((k, self[k]) for k in self.keys())
 
     def haskeys(self):
-        """Since keys() returns an iterator, this method is helpful in bypassing
+        """Since ``keys()`` returns an iterator, this method is helpful in bypassing
            code that looks for the existence of any defined results names."""
         return bool(self._tokdict)
 
@@ -225,10 +221,13 @@ class ParseResults:
 
         Example::
 
+            numlist = Word(nums)[...]
+            print(numlist.parseString("0 123 321")) # -> ['0', '123', '321']
+
             def remove_first(tokens):
                 tokens.pop(0)
-            print(OneOrMore(Word(nums)).parseString("0 123 321")) # -> ['0', '123', '321']
-            print(OneOrMore(Word(nums)).addParseAction(remove_first).parseString("0 123 321")) # -> ['123', '321']
+            numlist.addParseAction(remove_first)
+            print(numlist.parseString("0 123 321")) # -> ['123', '321']
 
             label = Word(alphas)
             patt = label("LABEL") + OneOrMore(Word(nums))
@@ -255,7 +254,9 @@ class ParseResults:
             if k == "default":
                 args = (args[0], v)
             else:
-                raise TypeError("pop() got an unexpected keyword argument '%s'" % k)
+                raise TypeError(
+                    "pop() got an unexpected keyword argument {!r}".format(k)
+                )
         if isinstance(args[0], int) or len(args) == 1 or args[0] in self:
             index = args[0]
             ret = self[index]
@@ -296,12 +297,14 @@ class ParseResults:
 
         Example::
 
-            print(OneOrMore(Word(nums)).parseString("0 123 321")) # -> ['0', '123', '321']
+            numlist = Word(nums)[...]
+            print(numlist.parseString("0 123 321")) # -> ['0', '123', '321']
 
             # use a parse action to insert the parse location in the front of the parsed results
             def insert_locn(locn, tokens):
                 tokens.insert(0, locn)
-            print(OneOrMore(Word(nums)).addParseAction(insert_locn).parseString("0 123 321")) # -> [0, '0', '123', '321']
+            numlist.addParseAction(insert_locn)
+            print(numlist.parseString("0 123 321")) # -> [0, '0', '123', '321']
         """
         self._toklist.insert(index, insStr)
         # fixup indices in token dictionary
@@ -313,22 +316,24 @@ class ParseResults:
 
     def append(self, item):
         """
-        Add single element to end of ParseResults list of elements.
+        Add single element to end of ``ParseResults`` list of elements.
 
         Example::
 
-            print(OneOrMore(Word(nums)).parseString("0 123 321")) # -> ['0', '123', '321']
+            numlist = Word(nums)[...]
+            print(numlist.parseString("0 123 321")) # -> ['0', '123', '321']
 
             # use a parse action to compute the sum of the parsed integers, and add it to the end
             def append_sum(tokens):
                 tokens.append(sum(map(int, tokens)))
-            print(OneOrMore(Word(nums)).addParseAction(append_sum).parseString("0 123 321")) # -> ['0', '123', '321', 444]
+            numlist.addParseAction(append_sum)
+            print(numlist.parseString("0 123 321")) # -> ['0', '123', '321', 444]
         """
         self._toklist.append(item)
 
     def extend(self, itemseq):
         """
-        Add sequence of elements to end of ParseResults list of elements.
+        Add sequence of elements to end of ``ParseResults`` list of elements.
 
         Example::
 
@@ -338,7 +343,8 @@ class ParseResults:
             def make_palindrome(tokens):
                 tokens.extend(reversed([t[::-1] for t in tokens]))
                 return ''.join(tokens)
-            print(patt.addParseAction(make_palindrome).parseString("lskdj sdlkjf lksd")) # -> 'lskdjsdlkjflksddsklfjkldsjdksl'
+            patt.addParseAction(make_palindrome)
+            print(patt.parseString("lskdj sdlkjf lksd")) # -> 'lskdjsdlkjflksddsklfjkldsjdksl'
         """
         if isinstance(itemseq, ParseResults):
             self.__iadd__(itemseq)
@@ -391,7 +397,7 @@ class ParseResults:
             return other + self
 
     def __repr__(self):
-        return "(%s, %s)" % (repr(self._toklist), self.asDict())
+        return "({!r}, {})".format(self._toklist, self.asDict())
 
     def __str__(self):
         return (
@@ -556,7 +562,7 @@ class ParseResults:
                 for k, v in items:
                     if out:
                         out.append(NL)
-                    out.append("%s%s- %s: " % (indent, ("  " * _depth), k))
+                    out.append("{}{}- {}: ".format(indent, ("  " * _depth), k))
                     if isinstance(v, ParseResults):
                         if v:
                             out.append(
@@ -571,13 +577,12 @@ class ParseResults:
                             out.append(str(v))
                     else:
                         out.append(repr(v))
-            elif any(isinstance(vv, ParseResults) for vv in self):
+            if any(isinstance(vv, ParseResults) for vv in self):
                 v = self
                 for i, vv in enumerate(v):
                     if isinstance(vv, ParseResults):
                         out.append(
-                            "\n%s%s[%d]:\n%s%s%s"
-                            % (
+                            "\n{}{}[{}]:\n{}{}{}".format(
                                 indent,
                                 ("  " * (_depth)),
                                 i,
@@ -662,9 +667,9 @@ class ParseResults:
     @classmethod
     def from_dict(cls, other, name=None):
         """
-        Helper classmethod to construct a ParseResults from a dict, preserving the
-        name-value relations as results names. If an optional 'name' argument is
-        given, a nested ParseResults will be returned
+        Helper classmethod to construct a ``ParseResults`` from a ``dict``, preserving the
+        name-value relations as results names. If an optional ``name`` argument is
+        given, a nested ``ParseResults`` will be returned.
         """
 
         def is_iterable(obj):
