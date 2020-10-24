@@ -9,62 +9,77 @@
 """
 from https://www.lua.org/manual/5.1/manual.html#8
 
-    chunk ::= {stat [`;´]} [laststat [`;´]]
+    chunk ::= {stat [';']} [laststat [';']]
 
     block ::= chunk
 
-    stat ::=  varlist `=´ explist |
+    stat ::=  varlist '=' explist |
          functioncall |
          do block end |
          while exp do block end |
          repeat block until exp |
          if exp then block {elseif exp then block} [else block] end |
-         for Name `=´ exp `,´ exp [`,´ exp] do block end |
+         for Name '=' exp ',' exp [',' exp] do block end |
          for namelist in explist do block end |
          function funcname funcbody |
          local function Name funcbody |
-         local namelist [`=´ explist]
+         local namelist ['=' explist]
 
     laststat ::= return [explist] | break
 
-    funcname ::= Name {`.´ Name} [`:´ Name]
+    funcname ::= Name {'.' Name} [':' Name]
 
-    varlist ::= var {`,´ var}
+    varlist ::= var {',' var}
 
-    var ::=  Name | prefixexp `[´ exp `]´ | prefixexp `.´ Name
+    var ::=  Name | prefixexp '[' exp ']' | prefixexp '.' Name
 
-    namelist ::= Name {`,´ Name}
+    namelist ::= Name {',' Name}
 
-    explist ::= {exp `,´} exp
+    explist ::= {exp ','} exp
 
-    exp ::=  nil | false | true | Number | String | `...´ | function |
+    exp ::=  nil | false | true | Number | String | '...' | function |
          prefixexp | tableconstructor | exp binop exp | unop exp
 
-    prefixexp ::= var | functioncall | `(´ exp `)´
+    prefixexp ::= var | functioncall | '(' exp ')'
 
-    functioncall ::=  prefixexp args | prefixexp `:´ Name args
+    functioncall ::=  prefixexp args | prefixexp ':' Name args
 
-    args ::=  `(´ [explist] `)´ | tableconstructor | String
+    args ::=  '(' [explist] ')' | tableconstructor | String
 
     function ::= function funcbody
 
-    funcbody ::= `(´ [parlist] `)´ block end
+    funcbody ::= '(' [parlist] ')' block end
 
-    parlist ::= namelist [`,´ `...´] | `...´
+    parlist ::= namelist [',' '...'] | '...'
 
-    tableconstructor ::= `{´ [fieldlist] `}´
+    tableconstructor ::= '{' [fieldlist] '}'
 
     fieldlist ::= field {fieldsep field} [fieldsep]
 
-    field ::= `[´ exp `]´ `=´ exp | Name `=´ exp | exp
+    field ::= '[' exp ']' '=' exp | Name '=' exp | exp
 
-    fieldsep ::= `,´ | `;´
+    fieldsep ::= ',' | ';'
 
-    binop ::= `+´ | `-´ | `*´ | `/´ | `^´ | `%´ | `..´ |
-         `<´ | `<=´ | `>´ | `>=´ | `==´ | `~=´ |
+    binop ::= '+' | '-' | '*' | '/' | '^' | '%' | '..' |
+         '<' | '<=' | '>' | '>=' | '==' | '~=' |
          and | or
 
-    unop ::= `-´ | not | `#´
+    unop ::= '-' | not | '#'
+
+operator precedence:
+
+     or
+     and
+     <     >     <=    >=    ~=    ==
+     |
+     ~
+     &
+     <<    >>
+     ..
+     +     -
+     *     /     //    %
+     unary operators (not   #     -     ~)
+     ^
 
 """
 import pyparsing as pp
@@ -84,13 +99,16 @@ keywords = {
     """.split()
 }
 vars().update(keywords)
+any_keyword = pp.MatchFirst(keywords.values()).setName("<keyword>")
 
 comment_intro = pp.Literal("--")
 short_comment = comment_intro + pp.restOfLine
 long_comment = comment_intro + LBRACK + ... + RBRACK
 lua_comment = long_comment | short_comment
 
-ident = ppc.identifier
+# must use negative lookahead to ensure we don't parse a keyword as an identifier
+ident = ~any_keyword + ppc.identifier
+
 name = pp.delimitedList(ident, delim=".", combine=True)
 
 namelist = pp.delimitedList(name)
@@ -111,7 +129,7 @@ stat = pp.Forward()
 laststat = pp.Group(RETURN + explist1) | BREAK
 
 #    block ::= {stat [';']} [laststat[';']]
-block = pp.Group(stat + OPT_SEMI)[1, ...] + pp.Optional(laststat)
+block = pp.Group(stat + OPT_SEMI)[1, ...] + pp.Optional(laststat + OPT_SEMI)
 
 #    field ::= '[' exp ']' '=' exp  |  Name '=' exp  |  exp
 field = pp.Group(
@@ -170,10 +188,20 @@ exp_atom = (
     | tableconstructor
 )
 
+# precedence of operations from https://www.lua.org/manual/5.3/manual.html#3.4.8
 exp <<= pp.infixNotation(
     exp_atom,
     [
+        ("^", 2, pp.opAssoc.LEFT),
+        (NOT | pp.oneOf("# - ~"), 1, pp.opAssoc.RIGHT),
+        (pp.oneOf("* / // %"), 2, pp.opAssoc.LEFT),
         (pp.oneOf("+ -"), 2, pp.opAssoc.LEFT),
+        ("..", 2, pp.opAssoc.LEFT),
+        (pp.oneOf("<< >>"), 2, pp.opAssoc.LEFT),
+        ("&", 2, pp.opAssoc.LEFT),
+        ("~", 2, pp.opAssoc.LEFT),
+        ("|", 2, pp.opAssoc.LEFT),
+        (pp.oneOf("< > <= >= ~= =="), 2, pp.opAssoc.LEFT),
         (AND, 2, pp.opAssoc.LEFT),
         (OR, 2, pp.opAssoc.LEFT),
     ],
@@ -248,6 +276,12 @@ if __name__ == "__main__":
         n = 0
         if t['foo'] then
             n = n + 1
+        end
+        if 10 > 8 then
+            n = n + 2
+        end
+        if (10 > 8) then
+            n = n + 2
         end
     end
     """
