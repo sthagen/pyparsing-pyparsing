@@ -1,6 +1,6 @@
 # module pyparsing.py
 #
-# Copyright (c) 2003-2019  Paul T. McGuire
+# Copyright (c) 2003-2020  Paul T. McGuire
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -96,14 +96,14 @@ classes inherit from. Use the docstrings for examples of how to:
 from collections import namedtuple
 
 version_info = namedtuple("version_info", "major minor micro releaseLevel serial")
-__version_info__ = version_info(3, 0, 0, "beta", 1)
+__version_info__ = version_info(3, 0, 0, "beta", 2)
 __version__ = (
     "{}.{}.{}".format(*__version_info__[:3])
     + ("{}{}".format(__version_info__.releaseLevel[0], __version_info__.serial), "")[
         __version_info__.releaseLevel == "final"
     ]
 )
-__versionTime__ = "19 August 2020 19:09 UTC"
+__versionTime__ = "24 December 2020 05:11 UTC"
 __author__ = "Paul McGuire <ptmcg@users.sourceforge.net>"
 
 from .util import *
@@ -149,10 +149,12 @@ __all__ = [
     "Forward",
     "GoToColumn",
     "Group",
+    "IndentedBlock",
     "Keyword",
     "LineEnd",
     "LineStart",
     "Literal",
+    "Located",
     "PrecededBy",
     "MatchFirst",
     "NoMatch",

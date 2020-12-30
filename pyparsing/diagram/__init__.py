@@ -2,7 +2,6 @@ import railroad
 import pyparsing
 from pkg_resources import resource_filename
 from typing import (
-    Union,
     List,
     Optional,
     NamedTuple,
@@ -104,12 +103,13 @@ def resolve_partial(partial: "EditablePartial[T]") -> T:
 def to_railroad(
     element: pyparsing.ParserElement,
     diagram_kwargs: dict = {},
-    vertical: Union[int, bool] = 5,
+    vertical: int = None,
 ) -> List[NamedDiagram]:
     """
     Convert a pyparsing element tree into a list of diagrams. This is the recommended entrypoint to diagram
     creation if you want to access the Railroad tree before it is converted to HTML
     :param diagram_kwargs: kwargs to pass to the Diagram() constructor
+    :param vertical: (optional)
     """
     # Convert the whole tree underneath the root
     lookup = ConverterState(diagram_kwargs=diagram_kwargs)
@@ -125,16 +125,14 @@ def to_railroad(
     return sorted(resolved, key=lambda diag: diag.index)
 
 
-def _should_vertical(specification: Union[int, bool], count: int) -> bool:
+def _should_vertical(specification: int, count: int) -> bool:
     """
     Returns true if we should return a vertical list of elements
     """
-    if isinstance(specification, bool):
-        return specification
-    elif isinstance(specification, int):
-        return count >= specification
+    if specification is None:
+        return False
     else:
-        raise Exception()
+        return count >= specification
 
 
 class ElementState:
@@ -275,7 +273,7 @@ def _to_diagram_element(
     element: pyparsing.ParserElement,
     parent: Optional[EditablePartial],
     lookup: ConverterState = None,
-    vertical: Union[int, bool] = 5,
+    vertical: int = None,
     index: int = 0,
     name_hint: str = None,
 ) -> Optional[EditablePartial]:
@@ -341,9 +339,9 @@ def _to_diagram_element(
             ret = EditablePartial.from_call(railroad.Sequence, items=[])
     elif isinstance(element, (pyparsing.Or, pyparsing.MatchFirst)):
         if _should_vertical(vertical, len(exprs)):
-            ret = EditablePartial.from_call(railroad.HorizontalChoice, items=[])
-        else:
             ret = EditablePartial.from_call(railroad.Choice, 0, items=[])
+        else:
+            ret = EditablePartial.from_call(railroad.HorizontalChoice, items=[])
     elif isinstance(element, pyparsing.Optional):
         ret = EditablePartial.from_call(railroad.Optional, item="")
     elif isinstance(element, pyparsing.OneOrMore):

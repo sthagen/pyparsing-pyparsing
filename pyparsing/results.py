@@ -69,6 +69,7 @@ class ParseResults:
         - month: 12
         - year: 1999
     """
+    _null_values = (None, b"", "", [], ())
 
     __slots__ = [
         "_name",
@@ -80,6 +81,57 @@ class ParseResults:
         "__weakref__",
     ]
 
+    class List(list):
+        """
+            Simple wrapper class to distinguish parsed list results that should be preserved
+            as actual Python lists, instead of being converted to :class:`ParseResults`:
+
+                LBRACK, RBRACK = map(pp.Suppress, "[]")
+                element = pp.Forward()
+                item = ppc.integer
+                element_list = LBRACK + pp.delimitedList(element) + RBRACK
+
+                # add parse actions to convert from ParseResults to actual Python collection types
+                def as_python_list(t):
+                    return pp.ParseResults.List(t.asList())
+                element_list.addParseAction(as_python_list)
+
+                element <<= item | element_list
+
+                element.runTests('''
+                    100
+                    [2,3,4]
+                    [[2, 1],3,4]
+                    [(2, 1),3,4]
+                    (2,3,4)
+                    ''', postParse=lambda s, r: (r[0], type(r[0])))
+
+            prints:
+
+                100
+                (100, <class 'int'>)
+
+                [2,3,4]
+                ([2, 3, 4], <class 'list'>)
+
+                [[2, 1],3,4]
+                ([[2, 1], 3, 4], <class 'list'>)
+
+            (Used internally by :class:`Group` when `aslist=True`.)
+            """
+
+        def __new__(cls, contained=None):
+            if contained is None:
+                contained = []
+
+            if not isinstance(contained, list):
+                raise TypeError(
+                    "{} may only be constructed with a list,"
+                    " not {}".format(cls.__name__, type(contained).__name__)
+                )
+
+            return list.__new__(cls)
+
     def __new__(cls, toklist=None, name=None, **kwargs):
         if isinstance(toklist, ParseResults):
             return toklist
@@ -87,12 +139,11 @@ class ParseResults:
         self._name = None
         self._parent = None
         self._all_names = set()
+
         if toklist is None:
-            toklist = []
-        if isinstance(toklist, list):
-            self._toklist = toklist[:]
-        elif isinstance(toklist, _generator_type):
-            self._toklist = list(toklist)
+            self._toklist = []
+        elif isinstance(toklist, (list, _generator_type)):
+            self._toklist = [toklist[:]] if isinstance(toklist, ParseResults.List) else list(toklist)
         else:
             self._toklist = [toklist]
         self._tokdict = dict()
@@ -104,16 +155,13 @@ class ParseResults:
         self, toklist=None, name=None, asList=True, modal=True, isinstance=isinstance
     ):
         self._modal = modal
-        if name is not None and name:
-            if not modal:
-                self._all_names = {name}
+        if name not in (None, ""):
             if isinstance(name, int):
                 name = str(name)
+            if not modal:
+                self._all_names = {name}
             self._name = name
-            if not (
-                isinstance(toklist, (type(None), *str_type, list))
-                and toklist in (None, "", [])
-            ):
+            if toklist not in self._null_values:
                 if isinstance(toklist, str_type):
                     toklist = [toklist]
                 if asList:
@@ -186,7 +234,7 @@ class ParseResults:
         return len(self._toklist)
 
     def __bool__(self):
-        return not not self._toklist
+        return not not self._toklist or not not self._tokdict
 
     def __iter__(self):
         return iter(self._toklist)
@@ -397,7 +445,7 @@ class ParseResults:
             return other + self
 
     def __repr__(self):
-        return "({!r}, {})".format(self._toklist, self.asDict())
+        return "{}({!r}, {})".format(type(self).__name__, self._toklist, self.asDict())
 
     def __str__(self):
         return (
@@ -474,7 +522,7 @@ class ParseResults:
         Returns a new copy of a :class:`ParseResults` object.
         """
         ret = ParseResults(self._toklist)
-        ret._tokdict = dict(self._tokdict.items())
+        ret._tokdict = dict(**self._tokdict)
         ret._parent = self._parent
         ret._all_names |= self._all_names
         ret._name = self._name
@@ -510,7 +558,7 @@ class ParseResults:
         elif self._parent:
             par = self._parent()
 
-            def lookup(self, sub):
+            def find_in_parent(self, sub):
                 return next(
                     (
                         k
@@ -521,7 +569,7 @@ class ParseResults:
                     None,
                 )
 
-            return lookup(self) if par else None
+            return find_in_parent(self) if par else None
         elif (
             len(self) == 1
             and len(self._tokdict) == 1

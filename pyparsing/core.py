@@ -1793,6 +1793,26 @@ class ParserElement(ABC):
 
         return success, allResults
 
+    def create_diagram(expr: "ParserElement", output_html, vertical=3, **kwargs):
+        """
+
+        """
+
+        try:
+            from .diagram import to_railroad, railroad_to_html
+        except ImportError as ie:
+            raise Exception(
+                "must install 'railroad' to generate parser railroad diagrams"
+            ) from ie
+
+        railroad = to_railroad(expr, vertical=vertical, diagram_kwargs=kwargs)
+        if isinstance(output_html, str):
+            with open(output_html, "w", encoding="utf-8") as diag_file:
+                diag_file.write(railroad_to_html(railroad))
+        else:
+            # we were passed a file-like object, just write to it
+            output_html.write(railroad_to_html(railroad))
+
 
 class _PendingSkip(ParserElement):
     # internal placeholder class to hold a place were '...' is added to a parser element,
@@ -2459,9 +2479,8 @@ class Regex(Token):
         loc = result.end()
         ret = ParseResults(result.group())
         d = result.groupdict()
-        if d:
-            for k, v in d.items():
-                ret[k] = v
+        for k, v in d.items():
+            ret[k] = v
         return loc, ret
 
     def parseImplAsGroupList(self, instring, loc, doActions=True):
@@ -2551,6 +2570,7 @@ class QuotedString(Token):
         [['This is the "quote"']]
         [['This is the quote with "embedded" quotes']]
     """
+    ws_map = ((r"\t", "\t"), (r"\n", "\n"), (r"\f", "\f"), (r"\r", "\r"))
 
     def __init__(
         self,
@@ -2661,8 +2681,7 @@ class QuotedString(Token):
             if isinstance(ret, str_type):
                 # replace escaped whitespace
                 if "\\" in ret and self.convertWhitespaceEscapes:
-                    ws_map = {r"\t": "\t", r"\n": "\n", r"\f": "\f", r"\r": "\r"}
-                    for wslit, wschar in ws_map.items():
+                    for wslit, wschar in self.ws_map:
                         ret = ret.replace(wslit, wschar)
 
                 # replace escaped characters
@@ -3234,7 +3253,8 @@ class And(ParseExpression):
         )
         errorStop = False
         for e in self.exprs[1:]:
-            if isinstance(e, And._ErrorStop):
+            # if isinstance(e, And._ErrorStop):
+            if type(e) is And._ErrorStop:
                 errorStop = True
                 continue
             if errorStop:
@@ -3883,6 +3903,45 @@ class PrecededBy(ParseElementEnhance):
         return loc, ret
 
 
+class Located(ParseElementEnhance):
+    """
+    Decorates a returned token with its starting and ending
+    locations in the input string.
+
+    This helper adds the following results names:
+
+     - ``locn_start`` - location where matched expression begins
+     - ``locn_end`` - location where matched expression ends
+     - ``value`` - the actual parsed results
+
+    Be careful if the input text contains ``<TAB>`` characters, you
+    may want to call :class:`ParserElement.parseWithTabs`
+
+    Example::
+
+        wd = Word(alphas)
+        for match in Located(wd).searchString("ljsdf123lksdjjf123lkkjj1222"):
+            print(match)
+
+    prints::
+
+        [0, ['ljsdf'], 5]
+        [8, ['lksdjjf'], 15]
+        [18, ['lkkjj'], 23]
+
+    """
+    def parseImpl(self, instring, loc, doActions=True):
+        start = loc
+        loc, tokens = self.expr._parse(
+            instring, start, doActions, callPreParse=False
+        )
+        ret_tokens = ParseResults([start, tokens, loc])
+        ret_tokens['locn_start'] = start
+        ret_tokens['value'] = tokens
+        ret_tokens['locn_end'] = loc
+        return loc, ret_tokens
+
+
 class NotAny(ParseElementEnhance):
     """Lookahead to disallow matching with the given parse expression.
     ``NotAny`` does *not* advance the parsing position within the
@@ -3962,7 +4021,7 @@ class _MultipleMatch(ParseElementEnhance):
                 else:
                     preloc = loc
                 loc, tmptokens = self_expr_parse(instring, preloc, doActions)
-                if tmptokens or tmptokens.haskeys():
+                if tmptokens:
                     tokens += tmptokens
         except (ParseException, IndexError):
             pass
@@ -4457,6 +4516,9 @@ class Group(TokenConverter):
     """Converter to return the matched tokens as a list - useful for
     returning tokens of :class:`ZeroOrMore` and :class:`OneOrMore` expressions.
 
+    The optional ``aslist`` argument when set to True will return the
+    parsed tokens as a Python list instead of a pyparsing ParseResults.
+
     Example::
 
         ident = Word(alphas)
@@ -4471,12 +4533,20 @@ class Group(TokenConverter):
         # -> ['fn', ['a', 'b', '100']]
     """
 
-    def __init__(self, expr):
+    def __init__(self, expr, aslist=False):
         super().__init__(expr)
         self.saveAsList = True
+        self._asPythonList = aslist
 
     def postParse(self, instring, loc, tokenlist):
-        return [tokenlist]
+        if self._asPythonList:
+            return ParseResults.List(
+                tokenlist.asList()
+                if isinstance(tokenlist, ParseResults)
+                else list(tokenlist)
+            )
+        else:
+            return [tokenlist]
 
 
 class Dict(TokenConverter):
@@ -4484,6 +4554,9 @@ class Dict(TokenConverter):
     as a dictionary. Each element can also be referenced using the first
     token in the expression as its key. Useful for tabular report
     scraping when the first column can be used as a item key.
+
+    The optional ``asdict`` argument when set to True will return the
+    parsed tokens as a Python dict instead of a pyparsing ParseResults.
 
     Example::
 
@@ -4519,24 +4592,39 @@ class Dict(TokenConverter):
     See more examples at :class:`ParseResults` of accessing fields by results name.
     """
 
-    def __init__(self, expr):
+    def __init__(self, expr, asdict=False):
         super().__init__(expr)
         self.saveAsList = True
+        self._asPythonDict = asdict
 
     def postParse(self, instring, loc, tokenlist):
         for i, tok in enumerate(tokenlist):
             if len(tok) == 0:
                 continue
+
             ikey = tok[0]
             if isinstance(ikey, int):
-                ikey = str(tok[0]).strip()
+                ikey = str(ikey).strip()
+
             if len(tok) == 1:
                 tokenlist[ikey] = _ParseResultsWithOffset("", i)
+
             elif len(tok) == 2 and not isinstance(tok[1], ParseResults):
                 tokenlist[ikey] = _ParseResultsWithOffset(tok[1], i)
+
             else:
-                dictvalue = tok.copy()  # ParseResults(i)
+                try:
+                    dictvalue = tok.copy()  # ParseResults(i)
+                except Exception:
+                    exc = TypeError(
+                        "could not extract dict values from parsed results"
+                        " - Dict expression must contain Grouped expressions"
+                    )
+                    exc.__cause__ = None
+                    raise exc
+
                 del dictvalue[0]
+
                 if len(dictvalue) != 1 or (
                     isinstance(dictvalue, ParseResults) and dictvalue.haskeys()
                 ):
@@ -4544,10 +4632,7 @@ class Dict(TokenConverter):
                 else:
                     tokenlist[ikey] = _ParseResultsWithOffset(dictvalue[0], i)
 
-        if self.resultsName:
-            return [tokenlist]
-        else:
-            return tokenlist
+        return tokenlist if not self._asPythonDict else tokenlist.asDict()
 
 
 class Suppress(TokenConverter):
@@ -4578,28 +4663,6 @@ class Suppress(TokenConverter):
 
     def suppress(self):
         return self
-
-
-class OnlyOnce:
-    """Wrapper for parse actions, to ensure they are only called once.
-    """
-
-    def __init__(self, methodCall):
-        self.callable = _trim_arity(methodCall)
-        self.called = False
-
-    def __call__(self, s, l, t):
-        if not self.called:
-            results = self.callable(s, l, t)
-            self.called = True
-            return results
-        raise ParseException(s, l, "OnlyOnce obj called multiple times w/out reset")
-
-    def reset(self):
-        """Allow the associated parse action to be called once more.
-        """
-
-        self.called = False
 
 
 def traceParseAction(f):

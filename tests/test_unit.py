@@ -9,8 +9,10 @@
 
 import contextlib
 import datetime
+import re
 import sys
 from io import StringIO
+from textwrap import dedent
 from unittest import TestCase
 
 import pyparsing as pp
@@ -53,6 +55,21 @@ class resetting:
     def __exit__(self, *args):
         for attr, value in zip(self.save_attrs, self.save_values):
             setattr(self.ob, attr, value)
+
+
+def find_all_re_matches(patt, s):
+    ret = []
+    start = 0
+    if isinstance(patt, str):
+        patt = re.compile(patt)
+    while True:
+        found = patt.search(s, pos=start)
+        if found:
+            ret.append(found)
+            start = found.end()
+        else:
+            break
+    return ret
 
 
 class Test1_PyparsingTestInit(TestCase):
@@ -400,346 +417,213 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testParseJSONData(self):
         expected = [
-            [
-                [
-                    "glossary",
-                    [
-                        ["title", "example glossary"],
-                        [
-                            "GlossDiv",
-                            [
-                                ["title", "S"],
-                                [
-                                    "GlossList",
-                                    [
-                                        [
-                                            ["ID", "SGML"],
-                                            ["SortAs", "SGML"],
-                                            [
-                                                "GlossTerm",
-                                                "Standard Generalized Markup Language",
-                                            ],
-                                            ["Acronym", "SGML"],
-                                            ["LargestPrimeLessThan100", 97],
-                                            ["AvogadroNumber", 6.02e23],
-                                            ["EvenPrimesGreaterThan2", None],
-                                            ["PrimesLessThan10", [2, 3, 5, 7]],
-                                            ["WMDsFound", False],
-                                            ["IraqAlQaedaConnections", None],
-                                            ["Abbrev", "ISO 8879:1986"],
-                                            [
-                                                "GlossDef",
-                                                "A meta-markup language, used to create markup languages such as "
-                                                "DocBook.",
-                                            ],
-                                            ["GlossSeeAlso", ["GML", "XML", "markup"]],
-                                            ["EmptyDict", []],
-                                            ["EmptyList", [[]]],
-                                        ]
-                                    ],
-                                ],
-                            ],
+            {
+                "glossary": {
+                    "GlossDiv": {
+                        "GlossList": [
+                            {
+                                "Abbrev": "ISO 8879:1986",
+                                "Acronym": "SGML",
+                                "AvogadroNumber": 6.02e23,
+                                "EmptyDict": {},
+                                "EmptyList": [],
+                                "EvenPrimesGreaterThan2": [],
+                                "FermatTheoremInMargin": False,
+                                "GlossDef": "A meta-markup language, "
+                                "used to create markup "
+                                "languages such as "
+                                "DocBook.",
+                                "GlossSeeAlso": ["GML", "XML", "markup"],
+                                "GlossTerm": "Standard Generalized " "Markup Language",
+                                "ID": "SGML",
+                                "LargestPrimeLessThan100": 97,
+                                "MapRequiringFiveColors": None,
+                                "PrimesLessThan10": [2, 3, 5, 7],
+                                "SortAs": "SGML",
+                            }
                         ],
+                        "title": "S",
+                    },
+                    "title": "example glossary",
+                }
+            },
+            {
+                "menu": {
+                    "id": "file",
+                    "popup": {
+                        "menuitem": [
+                            {"onclick": "CreateNewDoc()", "value": "New"},
+                            {"onclick": "OpenDoc()", "value": "Open"},
+                            {"onclick": "CloseDoc()", "value": "Close"},
+                        ]
+                    },
+                    "value": "File:",
+                }
+            },
+            {
+                "widget": {
+                    "debug": "on",
+                    "image": {
+                        "alignment": "center",
+                        "hOffset": 250,
+                        "name": "sun1",
+                        "src": "Images/Sun.png",
+                        "vOffset": 250,
+                    },
+                    "text": {
+                        "alignment": "center",
+                        "data": "Click Here",
+                        "hOffset": 250,
+                        "name": "text1",
+                        "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;",
+                        "size": 36,
+                        "style": "bold",
+                        "vOffset": 100,
+                    },
+                    "window": {
+                        "height": 500,
+                        "name": "main_window",
+                        "title": "Sample Konfabulator Widget",
+                        "width": 500,
+                    },
+                }
+            },
+            {
+                "web-app": {
+                    "servlet": [
+                        {
+                            "init-param": {
+                                "cachePackageTagsRefresh": 60,
+                                "cachePackageTagsStore": 200,
+                                "cachePackageTagsTrack": 200,
+                                "cachePagesDirtyRead": 10,
+                                "cachePagesRefresh": 10,
+                                "cachePagesStore": 100,
+                                "cachePagesTrack": 200,
+                                "cacheTemplatesRefresh": 15,
+                                "cacheTemplatesStore": 50,
+                                "cacheTemplatesTrack": 100,
+                                "configGlossary:adminEmail": "ksm@pobox.com",
+                                "configGlossary:installationAt": "Philadelphia, " "PA",
+                                "configGlossary:poweredBy": "Cofax",
+                                "configGlossary:poweredByIcon": "/images/cofax.gif",
+                                "configGlossary:staticPath": "/content/static",
+                                "dataStoreClass": "org.cofax.SqlDataStore",
+                                "dataStoreConnUsageLimit": 100,
+                                "dataStoreDriver": "com.microsoft.jdbc.sqlserver.SQLServerDriver",
+                                "dataStoreInitConns": 10,
+                                "dataStoreLogFile": "/usr/local/tomcat/logs/datastore.log",
+                                "dataStoreLogLevel": "debug",
+                                "dataStoreMaxConns": 100,
+                                "dataStoreName": "cofax",
+                                "dataStorePassword": "dataStoreTestQuery",
+                                "dataStoreTestQuery": "SET NOCOUNT "
+                                "ON;select "
+                                "test='test';",
+                                "dataStoreUrl": "jdbc:microsoft:sqlserver://LOCALHOST:1433;DatabaseName=goon",
+                                "dataStoreUser": "sa",
+                                "defaultFileTemplate": "articleTemplate.htm",
+                                "defaultListTemplate": "listTemplate.htm",
+                                "jspFileTemplate": "articleTemplate.jsp",
+                                "jspListTemplate": "listTemplate.jsp",
+                                "maxUrlLength": 500,
+                                "redirectionClass": "org.cofax.SqlRedirection",
+                                "searchEngineFileTemplate": "forSearchEngines.htm",
+                                "searchEngineListTemplate": "forSearchEnginesList.htm",
+                                "searchEngineRobotsDb": "WEB-INF/robots.db",
+                                "templateLoaderClass": "org.cofax.FilesTemplateLoader",
+                                "templateOverridePath": "",
+                                "templatePath": "templates",
+                                "templateProcessorClass": "org.cofax.WysiwygTemplate",
+                                "useDataStore": True,
+                                "useJSP": False,
+                            },
+                            "servlet-class": "org.cofax.cds.CDSServlet",
+                            "servlet-name": "cofaxCDS",
+                        },
+                        {
+                            "init-param": {
+                                "mailHost": "mail1",
+                                "mailHostOverride": "mail2",
+                            },
+                            "servlet-class": "org.cofax.cds.EmailServlet",
+                            "servlet-name": "cofaxEmail",
+                        },
+                        {
+                            "servlet-class": "org.cofax.cds.AdminServlet",
+                            "servlet-name": "cofaxAdmin",
+                        },
+                        {
+                            "servlet-class": "org.cofax.cds.FileServlet",
+                            "servlet-name": "fileServlet",
+                        },
+                        {
+                            "init-param": {
+                                "adminGroupID": 4,
+                                "betaServer": True,
+                                "dataLog": 1,
+                                "dataLogLocation": "/usr/local/tomcat/logs/dataLog.log",
+                                "dataLogMaxSize": "",
+                                "fileTransferFolder": "/usr/local/tomcat/webapps/content/fileTransferFolder",
+                                "log": 1,
+                                "logLocation": "/usr/local/tomcat/logs/CofaxTools.log",
+                                "logMaxSize": "",
+                                "lookInContext": 1,
+                                "removePageCache": "/content/admin/remove?cache=pages&id=",
+                                "removeTemplateCache": "/content/admin/remove?cache=templates&id=",
+                                "templatePath": "toolstemplates/",
+                            },
+                            "servlet-class": "org.cofax.cms.CofaxToolsServlet",
+                            "servlet-name": "cofaxTools",
+                        },
                     ],
-                ]
-            ],
-            [
-                [
-                    "menu",
-                    [
-                        ["id", "file"],
-                        ["value", "File:"],
-                        [
-                            "popup",
-                            [
-                                [
-                                    "menuitem",
-                                    [
-                                        [
-                                            ["value", "New"],
-                                            ["onclick", "CreateNewDoc()"],
-                                        ],
-                                        [["value", "Open"], ["onclick", "OpenDoc()"]],
-                                        [["value", "Close"], ["onclick", "CloseDoc()"]],
-                                    ],
-                                ]
-                            ],
-                        ],
+                    "servlet-mapping": {
+                        "cofaxAdmin": "/admin/*",
+                        "cofaxCDS": "/",
+                        "cofaxEmail": "/cofaxutil/aemail/*",
+                        "cofaxTools": "/tools/*",
+                        "fileServlet": "/static/*",
+                    },
+                    "taglib": {
+                        "taglib-location": "/WEB-INF/tlds/cofax.tld",
+                        "taglib-uri": "cofax.tld",
+                    },
+                }
+            },
+            {
+                "menu": {
+                    "header": "SVG Viewer",
+                    "items": [
+                        {"id": "Open"},
+                        {"id": "OpenNew", "label": "Open New"},
+                        None,
+                        {"id": "ZoomIn", "label": "Zoom In"},
+                        {"id": "ZoomOut", "label": "Zoom Out"},
+                        {"id": "OriginalView", "label": "Original View"},
+                        None,
+                        {"id": "Quality"},
+                        {"id": "Pause"},
+                        {"id": "Mute"},
+                        None,
+                        {"id": "Find", "label": "Find..."},
+                        {"id": "FindAgain", "label": "Find Again"},
+                        {"id": "Copy"},
+                        {"id": "CopyAgain", "label": "Copy Again"},
+                        {"id": "CopySVG", "label": "Copy SVG"},
+                        {"id": "ViewSVG", "label": "View SVG"},
+                        {"id": "ViewSource", "label": "View Source"},
+                        {"id": "SaveAs", "label": "Save As"},
+                        None,
+                        {"id": "Help"},
+                        {"id": "About", "label": "About Adobe CVG Viewer..."},
                     ],
-                ]
-            ],
-            [
-                [
-                    "widget",
-                    [
-                        ["debug", "on"],
-                        [
-                            "window",
-                            [
-                                ["title", "Sample Konfabulator Widget"],
-                                ["name", "main_window"],
-                                ["width", 500],
-                                ["height", 500],
-                            ],
-                        ],
-                        [
-                            "image",
-                            [
-                                ["src", "Images/Sun.png"],
-                                ["name", "sun1"],
-                                ["hOffset", 250],
-                                ["vOffset", 250],
-                                ["alignment", "center"],
-                            ],
-                        ],
-                        [
-                            "text",
-                            [
-                                ["data", "Click Here"],
-                                ["size", 36],
-                                ["style", "bold"],
-                                ["name", "text1"],
-                                ["hOffset", 250],
-                                ["vOffset", 100],
-                                ["alignment", "center"],
-                                [
-                                    "onMouseUp",
-                                    "sun1.opacity = (sun1.opacity / 100) * 90;",
-                                ],
-                            ],
-                        ],
-                    ],
-                ]
-            ],
-            [
-                [
-                    "web-app",
-                    [
-                        [
-                            "servlet",
-                            [
-                                [
-                                    ["servlet-name", "cofaxCDS"],
-                                    ["servlet-class", "org.cofax.cds.CDSServlet"],
-                                    [
-                                        "init-param",
-                                        [
-                                            [
-                                                "configGlossary:installationAt",
-                                                "Philadelphia, PA",
-                                            ],
-                                            [
-                                                "configGlossary:adminEmail",
-                                                "ksm@pobox.com",
-                                            ],
-                                            ["configGlossary:poweredBy", "Cofax"],
-                                            [
-                                                "configGlossary:poweredByIcon",
-                                                "/images/cofax.gif",
-                                            ],
-                                            [
-                                                "configGlossary:staticPath",
-                                                "/content/static",
-                                            ],
-                                            [
-                                                "templateProcessorClass",
-                                                "org.cofax.WysiwygTemplate",
-                                            ],
-                                            [
-                                                "templateLoaderClass",
-                                                "org.cofax.FilesTemplateLoader",
-                                            ],
-                                            ["templatePath", "templates"],
-                                            ["templateOverridePath", ""],
-                                            ["defaultListTemplate", "listTemplate.htm"],
-                                            [
-                                                "defaultFileTemplate",
-                                                "articleTemplate.htm",
-                                            ],
-                                            ["useJSP", False],
-                                            ["jspListTemplate", "listTemplate.jsp"],
-                                            ["jspFileTemplate", "articleTemplate.jsp"],
-                                            ["cachePackageTagsTrack", 200],
-                                            ["cachePackageTagsStore", 200],
-                                            ["cachePackageTagsRefresh", 60],
-                                            ["cacheTemplatesTrack", 100],
-                                            ["cacheTemplatesStore", 50],
-                                            ["cacheTemplatesRefresh", 15],
-                                            ["cachePagesTrack", 200],
-                                            ["cachePagesStore", 100],
-                                            ["cachePagesRefresh", 10],
-                                            ["cachePagesDirtyRead", 10],
-                                            [
-                                                "searchEngineListTemplate",
-                                                "forSearchEnginesList.htm",
-                                            ],
-                                            [
-                                                "searchEngineFileTemplate",
-                                                "forSearchEngines.htm",
-                                            ],
-                                            [
-                                                "searchEngineRobotsDb",
-                                                "WEB-INF/robots.db",
-                                            ],
-                                            ["useDataStore", True],
-                                            [
-                                                "dataStoreClass",
-                                                "org.cofax.SqlDataStore",
-                                            ],
-                                            [
-                                                "redirectionClass",
-                                                "org.cofax.SqlRedirection",
-                                            ],
-                                            ["dataStoreName", "cofax"],
-                                            [
-                                                "dataStoreDriver",
-                                                "com.microsoft.jdbc.sqlserver.SQLServerDriver",
-                                            ],
-                                            [
-                                                "dataStoreUrl",
-                                                "jdbc:microsoft:sqlserver://LOCALHOST:1433;DatabaseName=goon",
-                                            ],
-                                            ["dataStoreUser", "sa"],
-                                            ["dataStorePassword", "dataStoreTestQuery"],
-                                            [
-                                                "dataStoreTestQuery",
-                                                "SET NOCOUNT ON;select test='test';",
-                                            ],
-                                            [
-                                                "dataStoreLogFile",
-                                                "/usr/local/tomcat/logs/datastore.log",
-                                            ],
-                                            ["dataStoreInitConns", 10],
-                                            ["dataStoreMaxConns", 100],
-                                            ["dataStoreConnUsageLimit", 100],
-                                            ["dataStoreLogLevel", "debug"],
-                                            ["maxUrlLength", 500],
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    ["servlet-name", "cofaxEmail"],
-                                    ["servlet-class", "org.cofax.cds.EmailServlet"],
-                                    [
-                                        "init-param",
-                                        [
-                                            ["mailHost", "mail1"],
-                                            ["mailHostOverride", "mail2"],
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    ["servlet-name", "cofaxAdmin"],
-                                    ["servlet-class", "org.cofax.cds.AdminServlet"],
-                                ],
-                                [
-                                    ["servlet-name", "fileServlet"],
-                                    ["servlet-class", "org.cofax.cds.FileServlet"],
-                                ],
-                                [
-                                    ["servlet-name", "cofaxTools"],
-                                    [
-                                        "servlet-class",
-                                        "org.cofax.cms.CofaxToolsServlet",
-                                    ],
-                                    [
-                                        "init-param",
-                                        [
-                                            ["templatePath", "toolstemplates/"],
-                                            ["log", 1],
-                                            [
-                                                "logLocation",
-                                                "/usr/local/tomcat/logs/CofaxTools.log",
-                                            ],
-                                            ["logMaxSize", ""],
-                                            ["dataLog", 1],
-                                            [
-                                                "dataLogLocation",
-                                                "/usr/local/tomcat/logs/dataLog.log",
-                                            ],
-                                            ["dataLogMaxSize", ""],
-                                            [
-                                                "removePageCache",
-                                                "/content/admin/remove?cache=pages&id=",
-                                            ],
-                                            [
-                                                "removeTemplateCache",
-                                                "/content/admin/remove?cache=templates&id=",
-                                            ],
-                                            [
-                                                "fileTransferFolder",
-                                                "/usr/local/tomcat/webapps/content/fileTransferFolder",
-                                            ],
-                                            ["lookInContext", 1],
-                                            ["adminGroupID", 4],
-                                            ["betaServer", True],
-                                        ],
-                                    ],
-                                ],
-                            ],
-                        ],
-                        [
-                            "servlet-mapping",
-                            [
-                                ["cofaxCDS", "/"],
-                                ["cofaxEmail", "/cofaxutil/aemail/*"],
-                                ["cofaxAdmin", "/admin/*"],
-                                ["fileServlet", "/static/*"],
-                                ["cofaxTools", "/tools/*"],
-                            ],
-                        ],
-                        [
-                            "taglib",
-                            [
-                                ["taglib-uri", "cofax.tld"],
-                                ["taglib-location", "/WEB-INF/tlds/cofax.tld"],
-                            ],
-                        ],
-                    ],
-                ]
-            ],
-            [
-                [
-                    "menu",
-                    [
-                        ["header", "SVG Viewer"],
-                        [
-                            "items",
-                            [
-                                [["id", "Open"]],
-                                [["id", "OpenNew"], ["label", "Open New"]],
-                                None,
-                                [["id", "ZoomIn"], ["label", "Zoom In"]],
-                                [["id", "ZoomOut"], ["label", "Zoom Out"]],
-                                [["id", "OriginalView"], ["label", "Original View"]],
-                                None,
-                                [["id", "Quality"]],
-                                [["id", "Pause"]],
-                                [["id", "Mute"]],
-                                None,
-                                [["id", "Find"], ["label", "Find..."]],
-                                [["id", "FindAgain"], ["label", "Find Again"]],
-                                [["id", "Copy"]],
-                                [["id", "CopyAgain"], ["label", "Copy Again"]],
-                                [["id", "CopySVG"], ["label", "Copy SVG"]],
-                                [["id", "ViewSVG"], ["label", "View SVG"]],
-                                [["id", "ViewSource"], ["label", "View Source"]],
-                                [["id", "SaveAs"], ["label", "Save As"]],
-                                None,
-                                [["id", "Help"]],
-                                [
-                                    ["id", "About"],
-                                    ["label", "About Adobe CVG Viewer..."],
-                                ],
-                            ],
-                        ],
-                    ],
-                ]
-            ],
+                }
+            },
         ]
 
-        for t, exp in zip((test1, test2, test3, test4, test5), expected):
-            self.assertParseAndCheckList(jsonObject, t, exp, verbose=True)
+        for t, exp_result in zip((test1, test2, test3, test4, test5), expected):
+            result = jsonObject.parseString(t)
+            self.assertEqual(exp_result, result[0])
 
     def testParseCommaSeparatedValues(self):
         testData = [
@@ -1570,8 +1454,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             {"_skipped": ["red ", "456 "]},
         )
 
-    def testEllipsisRepetion(self):
-        import re
+    def testEllipsisRepetition(self):
 
         word = pp.Word(pp.alphas).setName("word")
         num = pp.Word(pp.nums).setName("num")
@@ -3070,7 +2953,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             )
 
     def testParseUsingRegex(self):
-        import re
 
         signedInt = pp.Regex(r"[-+][0-9]+")
         unsignedInt = pp.Regex(r"[0-9]+")
@@ -3534,8 +3416,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         """
 
-        from textwrap import dedent
-
         test = dedent(test)
         print(test)
 
@@ -3604,8 +3484,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 + str(res3.asList()),
             )
             print()
-
-        import re
 
         k = pp.Regex(r"a+", flags=re.S + re.M)
         k = k.parseWithTabs()
@@ -4740,6 +4618,38 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             samplestr1[res.locn_start : res.locn_end],
             "incorrect location calculation",
         )
+
+    def testLocatedExprUsingLocated(self):
+        #             012345678901234567890123456789012345678901234567890
+        samplestr1 = "DOB 10-10-2010;more garbage;ID PARI12345678  ;more garbage"
+
+        id_ref = pp.Located("ID" + pp.Word(pp.alphanums, exact=12)("id"))
+
+        res = id_ref.searchString(samplestr1)[0]
+        print(res.dump())
+        self.assertEqual(
+            "ID PARI12345678",
+            samplestr1[res.locn_start:res.locn_end],
+            "incorrect location calculation",
+        )
+        self.assertParseResultsEquals(res,
+                                      [28, ['ID', 'PARI12345678'], 43],
+                                      {'locn_end': 43,
+                                       'locn_start': 28,
+                                       'value': {'id': 'PARI12345678'}}
+        )
+
+        wd = pp.Word(pp.alphas)
+        test_string = "ljsdf123lksdjjf123lkkjj1222"
+        pp_matches = pp.Located(wd).searchString(test_string)
+        re_matches = find_all_re_matches("[a-z]+", test_string)
+        for pp_match, re_match in zip(pp_matches, re_matches):
+            self.assertParseResultsEquals(pp_match, [re_match.start(),
+                                                     [re_match.group(0)],
+                                                     re_match.end()])
+            print(pp_match)
+            print(re_match)
+            print(pp_match.value)
 
     def testPop(self):
         source = "AAA 123 456 789 234"
@@ -6281,7 +6191,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     # Make sure example in indentedBlock docstring actually works!
     def testIndentedBlockExample(self):
-        from textwrap import dedent
 
         data = dedent(
             """
@@ -6375,7 +6284,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testIndentedBlock(self):
         # parse pseudo-yaml indented text
-        import textwrap
 
         EQ = pp.Suppress("=")
         stack = [1]
@@ -6396,7 +6304,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 c3 = 'A horse, a horse, my kingdom for a horse'
             d = 505
         """
-        text = textwrap.dedent(text)
+        text = dedent(text)
         print(text)
 
         result = parser.parseString(text)
@@ -6407,7 +6315,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     # exercise indentedBlock with example posted in issue #87
     def testIndentedBlockTest2(self):
-        from textwrap import dedent
 
         indent_stack = [1]
 
@@ -6511,8 +6418,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             block <<= pp.Literal("block:") + body
             return block
 
-        from textwrap import dedent
-
         # This input string is a perfect match for the parser, so a single match is found
         p1 = get_parser()
         r1 = list(
@@ -6608,6 +6513,65 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             )
         )
         self.assertEqual(1, len(r6))
+
+    def testIndentedBlockClass(self):
+        data = """\
+
+            A
+                100
+                101
+
+                102
+            B
+                200
+                201
+
+            C
+                300
+
+        """
+
+        integer = ppc.integer
+        group = pp.Group(pp.Char(pp.alphas) + pp.Group(pp.IndentedBlock(integer)))
+
+        group[...].parseString(data).pprint()
+
+        self.assertParseAndCheckList(
+            group[...], data, [["A", [100, 101, 102]], ["B", [200, 201]], ["C", [300]]]
+        )
+
+    def testIndentedBlockClassWithRecursion(self):
+        data = """\
+
+            A
+                100
+                101
+
+                102
+            B
+                b
+                    200
+                    201
+
+            C
+                300
+
+        """
+
+        integer = ppc.integer
+        group = pp.Forward()
+        group <<= pp.Group(
+            pp.Char(pp.alphas) + pp.Group(pp.IndentedBlock(integer | group))
+        )
+
+        print("using searchString")
+        print(sum(group.searchString(data)).dump())
+
+        self.assertParseAndCheckList(
+            group[...],
+            data,
+            [["A", [100, 101, 102]], ["B", [["b", [200, 201]]]], ["C", [300]]],
+        )
 
     def testInvalidDiagSetting(self):
         with self.assertRaises(
@@ -6924,8 +6888,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
          - enable_debug_on_named_expressions - flag to auto-enable debug on all subsequent
            calls to ParserElement.setName() (default=False)
         """
-        import textwrap
-
         with ppt.reset_pyparsing_context():
             test_stdout = StringIO()
 
@@ -6938,7 +6900,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
                 integer[...].parseString("1 2 3")
 
-            expected_debug_output = textwrap.dedent(
+            expected_debug_output = dedent(
                 """\
                 Match integer at loc 0(1,1)
                   1 2 3
@@ -6968,7 +6930,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             )
 
     def testEnableDebugOnExpressionWithParseAction(self):
-        import textwrap
 
         test_stdout = StringIO()
         with resetting(sys, "stdout", "stderr"):
@@ -6984,7 +6945,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             parser.setDebug(False)
             parser.parseString("123 A100")
 
-        expected_debug_output = textwrap.dedent(
+        expected_debug_output = dedent(
             """\
             Match [{integer | W:(0-9A-Za-z)}]... at loc 0(1,1)
               123 A100
@@ -7042,7 +7003,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         )
 
     def testEnableDebugWithCachedExpressionsMarkedWithAsterisk(self):
-        import textwrap
 
         test_stdout = StringIO()
         with resetting(sys, "stdout", "stderr"):
@@ -7058,7 +7018,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             grammar = (z | leading_a | b)[...] + "a"
             grammar.parseString("aba")
 
-        expected_debug_output = textwrap.dedent(
+        expected_debug_output = dedent(
             """\
             Match Z at loc 0(1,1)
               aba
@@ -7226,7 +7186,6 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testWordInternalReRanges(self):
         import random
-        import re
 
         self.assertEqual(
             "[!-~]+",
@@ -7707,7 +7666,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         print(res.asDict())
 
         self.assertEqual(
-            "(['test', 'blub'], {'word': 'blub'})",
+            "ParseResults(['test', 'blub'], {'word': 'blub'})",
             repr(res),
             "incorrect repr for ParseResults with listAllMatches=False",
         )
@@ -7720,7 +7679,7 @@ class Test2_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         print(res.asDict())
 
         self.assertEqual(
-            "(['test', 'blub'], {'word': ['test', 'blub']})",
+            "ParseResults(['test', 'blub'], {'word': ['test', 'blub']})",
             repr(res),
             "incorrect repr for ParseResults with listAllMatches=True",
         )
