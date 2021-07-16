@@ -5,8 +5,8 @@ Using the pyparsing module
 :author: Paul McGuire
 :address: ptmcg@users.sourceforge.net
 
-:revision: 3.0.0
-:date: August, 2020
+:revision: 3.0.1
+:date: May, 2021
 
 :copyright: Copyright |copy| 2003-2020 Paul McGuire.
 
@@ -651,7 +651,7 @@ Expression operators
 - ``*`` - creates ``And`` by multiplying the expression by the integer operand; if
   expression is multiplied by a 2-tuple, creates an ``And`` of (min,max)
   expressions (similar to "{min,max}" form in regular expressions); if
-  min is None, intepret as (0,max); if max is None, interpret as
+  min is None, interpret as (0,max); if max is None, interpret as
   ``expr*min + ZeroOrMore(expr)``
 
 - ``-`` - like ``+`` but with no backup and retry of alternatives
@@ -765,15 +765,45 @@ Other classes
       own list structure, so that the tokens can be handled as a hierarchical
       tree
 
+  - as an object
+
+    - named elements can be accessed as if they were attributes of an object:
+      if an element is referenced that does not exist, it will return ``""``.
+
   ParseResults can also be converted to an ordinary list of strings
   by calling ``asList()``.  Note that this will strip the results of any
   field names that have been defined for any embedded parse elements.
   (The ``pprint`` module is especially good at printing out the nested contents
   given by ``asList()``.)
 
-  Finally, ParseResults can be viewed by calling ``dump()``. ``dump()` will first show
+  Finally, ParseResults can be viewed by calling ``dump()``. ``dump()`` will first show
   the ``asList()`` output, followed by an indented structure listing parsed tokens that
   have been assigned results names.
+
+  Here is sample code illustrating some of these methods::
+
+    >>> number = Word(nums)
+    >>> name = Combine(Word(alphas)[...], adjacent=False, joinString=" ")
+    >>> parser = number("house_number") + name("street_name")
+    >>> result = parser.parseString("123 Main St")
+    >>> print(result)
+    ['123', 'Main St']
+    >>> print(type(result))
+    <class 'pyparsing.ParseResults'>
+    >>> print(repr(result))
+    (['123', 'Main St'], {'house_number': ['123'], 'street_name': ['Main St']})
+    >>> result.house_number
+    '123'
+    >>> result["street_name"]
+    'Main St'
+    >>> result.asList()
+    ['123', 'Main St']
+    >>> result.asDict()
+    {'house_number': '123', 'street_name': 'Main St'}
+    >>> print(result.dump())
+    ['123', 'Main St']
+    - house_number: '123'
+    - street_name: 'Main St'
 
 
 Exception classes and Troubleshooting
@@ -895,7 +925,7 @@ Helper methods
       to the ``infixNotation`` method.
 
   2.  Define a list of tuples for each level of operator
-      precendence.  Each tuple is of the form
+      precedence.  Each tuple is of the form
       ``(opExpr, numTerms, rightLeftAssoc, parseAction)``, where:
 
       - ``opExpr`` - the pyparsing expression for the operator;
