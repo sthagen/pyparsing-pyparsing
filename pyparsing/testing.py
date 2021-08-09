@@ -20,6 +20,7 @@ class pyparsing_test:
         """
         Context manager to be used when writing unit tests that modify pyparsing config values:
          - packrat parsing
+         - bounded recursion parsing
          - default whitespace characters.
          - default keyword characters
          - literal string auto-conversion class
@@ -61,6 +62,9 @@ class pyparsing_test:
             else:
                 self._save_context["packrat_cache_size"] = None
             self._save_context["packrat_parse"] = ParserElement._parse
+            self._save_context[
+                "recursion_enabled"
+            ] = ParserElement._left_recursion_enabled
 
             self._save_context["__diag__"] = {
                 name: getattr(__diag__, name) for name in __diag__._all_names
@@ -78,7 +82,7 @@ class pyparsing_test:
                 ParserElement.DEFAULT_WHITE_CHARS
                 != self._save_context["default_whitespace"]
             ):
-                ParserElement.setDefaultWhitespaceChars(
+                ParserElement.set_default_whitespace_chars(
                     self._save_context["default_whitespace"]
                 )
 
@@ -94,9 +98,12 @@ class pyparsing_test:
 
             ParserElement._packratEnabled = False
             if self._save_context["packrat_enabled"]:
-                ParserElement.enablePackrat(self._save_context["packrat_cache_size"])
+                ParserElement.enable_packrat(self._save_context["packrat_cache_size"])
             else:
                 ParserElement._parse = self._save_context["packrat_parse"]
+            ParserElement._left_recursion_enabled = self._save_context[
+                "recursion_enabled"
+            ]
 
             __compat__.collect_all_And_tokens = self._save_context["__compat__"]
 
@@ -126,9 +133,9 @@ class pyparsing_test:
             and compare any defined results names with an optional ``expected_dict``.
             """
             if expected_list is not None:
-                self.assertEqual(expected_list, result.asList(), msg=msg)
+                self.assertEqual(expected_list, result.as_list(), msg=msg)
             if expected_dict is not None:
-                self.assertEqual(expected_dict, result.asDict(), msg=msg)
+                self.assertEqual(expected_dict, result.as_dict(), msg=msg)
 
         def assertParseAndCheckList(
             self, expr, test_string, expected_list, msg=None, verbose=True
@@ -137,7 +144,7 @@ class pyparsing_test:
             Convenience wrapper assert to test a parser element and input string, and assert that
             the resulting ``ParseResults.asList()`` is equal to the ``expected_list``.
             """
-            result = expr.parseString(test_string, parseAll=True)
+            result = expr.parse_string(test_string, parse_all=True)
             if verbose:
                 print(result.dump())
             self.assertParseResultsEquals(result, expected_list=expected_list, msg=msg)
@@ -149,7 +156,7 @@ class pyparsing_test:
             Convenience wrapper assert to test a parser element and input string, and assert that
             the resulting ``ParseResults.asDict()`` is equal to the ``expected_dict``.
             """
-            result = expr.parseString(test_string, parseAll=True)
+            result = expr.parse_string(test_string, parseAll=True)
             if verbose:
                 print(result.dump())
             self.assertParseResultsEquals(result, expected_dict=expected_dict, msg=msg)

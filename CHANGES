@@ -2,14 +2,72 @@
 Change Log
 ==========
 
-Version 3.0.0c1 - April, 2021
------------------------------
+Version 3.0.0c1 -
+-----------------
+- Better exception messages to show full word where an exception occurred.
+
+      Word(alphas)[...].parseString("abc 123", parseAll=True)
+
+  Was:
+      pyparsing.ParseException: Expected end of text, found '1'  (at char 4), (line:1, col:5)
+  Now:
+      pyparsing.exceptions.ParseException: Expected end of text, found '123'  (at char 4), (line:1, col:5)
+
+
+Version 3.0.0b3 - August, 2021
+------------------------------
+- PEP-8 compatible names are being introduced in pyparsing version 3.0!
+  All methods such as `parseString` have been replaced with the PEP-8
+  compliant name `parse_string`. In addition, arguments such as `parseAll`
+  have been renamed to `parse_all`. For backward-compatibility, synonyms for
+  all renamed methods and arguments have been added, so that existing
+  pyparsing parsers will not break. These synonyms will be removed in a future
+  release.
+
+  In addition, the Optional class has been renamed to Opt, since it clashes
+  with the common typing.Optional type specifier that is used in the Python
+  type annotations. A compatibility synonym is defined for now, but will be
+  removed in a future release.
+
+- HUGE NEW FEATURE - Support for left-recursive parsers!
+  Following the method used in Python's PEG parser, pyparsing now supports
+  left-recursive parsers when left recursion is enabled.
+
+        import pyparsing as pp
+        pp.ParserElement.enable_left_recursion()
+
+        # a common left-recursion definition
+        # define a list of items as 'list + item | item'
+        # BNF:
+        #   item_list := item_list item | item
+        #   item := word of alphas
+        item_list = pp.Forward()
+        item = pp.Word(pp.alphas)
+        item_list <<= item_list + item | item
+
+        item_list.run_tests("""\
+            To parse or not to parse that is the question
+            """)
+  Prints:
+
+        ['To', 'parse', 'or', 'not', 'to', 'parse', 'that', 'is', 'the', 'question']
+
+  Great work contributed by Max Fischer!
+
+- `delimited_list` now supports an additional flag `allow_trailing_delim`,
+  to optionally parse an additional delimiter at the end of the list.
+  Contributed by Kazantcev Andrey, thanks!
+
 - Removed internal comparison of results values against b"", which
   raised a BytesWarning when run with `python -bb`. Fixes issue #271 reported
   by Florian Bruhin, thank you!
 
 - Fixed STUDENTS table in sql2dot.py example, fixes issue #261 reported by
   legrandlegrand - much better.
+
+- Python 3.5 will not be supported in the pyparsing 3 releases. This will allow
+  for future pyparsing releases to add parameter type annotations, and to take
+  advantage of dict key ordering in internal results name tracking.
 
 
 Version 3.0.0b2 - December, 2020

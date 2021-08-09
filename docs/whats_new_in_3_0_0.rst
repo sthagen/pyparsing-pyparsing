@@ -4,7 +4,7 @@ What's New in Pyparsing 3.0.0
 
 :author: Paul McGuire
 
-:date: December, 2020
+:date: August, 2021
 
 :abstract: This document summarizes the changes made
     in the 3.0.0 release of pyparsing.
@@ -16,6 +16,30 @@ What's New in Pyparsing 3.0.0
 
 New Features
 ============
+
+PEP-8 naming
+------------
+This release of pyparsing will (finally!) include PEP-8 compatible names and arguments.
+Backward-compatibility is maintained by defining synonyms using the old camelCase names
+pointing to the new snake_case names.
+
+This code written using non-PEP8 names::
+
+    wd = pp.Word(pp.printables, excludeChars="$")
+    wd_list = pp.delimitedList(wd, delim="$")
+    print(wd_list.parseString("dkls$134lkjk$lsd$$").asList())
+
+can now be written as::
+
+    wd = pp.Word(pp.printables, exclude_chars="$")
+    wd_list = pp.delimited_list(wd, delim="$")
+    print(wd_list.parse_string("dkls$134lkjk$lsd$$").as_list())
+
+Pyparsing 3.0 will run both versions of this example.
+
+New code should be written using the PEP-8 compatible names. The compatibility
+synonyms will be removed in a future version.
+
 
 Railroad diagramming
 --------------------
@@ -39,6 +63,39 @@ generator for documenting pyparsing parsers. You need to install
     parser.create_diagram('parser_rr_diag.html')
 
 (Contributed by Michael Milton)
+
+Support for left-recursive parsers
+----------------------------------
+Another significant enhancement in 3.0 is support for left-recursive (LR)
+parsers. Previously, given a left-recursive parser, pyparsing would
+recurse repeatedly until hitting the Python recursion limit. Following
+the methods of the Python PEG parser, pyparsing uses a variation of
+packrat parsing to detect and handle left-recursion during parsing.::
+
+    import pyparsing as pp
+    pp.ParserElement.enableLeftRecursion()
+
+    # a common left-recursion definition
+    # define a list of items as 'list + item | item'
+    # BNF:
+    #   item_list := item_list item | item
+    #   item := word of alphas
+    item_list = pp.Forward()
+    item = pp.Word(pp.alphas)
+    item_list <<= item_list + item | item
+
+    item_list.runTests("""\
+        To parse or not to parse that is the question
+        """)
+
+Prints::
+
+    ['To', 'parse', 'or', 'not', 'to', 'parse', 'that', 'is', 'the', 'question']
+
+See more examples in left_recursion.py in the pyparsing examples directory.
+
+(Contributed by Max Fischer)
+
 
 Refactored/added diagnostic flags
 ---------------------------------
@@ -206,6 +263,10 @@ New / improved examples
 
 Other new features
 ------------------
+- ``delimited_list`` now supports an additional flag ``allow_trailing_delim``,
+  to optionally parse an additional delimiter at the end of the list.
+  Submitted by Kazantcev Andrey.
+
 - Enhanced default strings created for Word expressions, now showing
   string ranges if possible. ``Word(alphas)`` would formerly
   print as ``W:(ABCD...)``, now prints as ``W:(A-Za-z)``.
@@ -319,6 +380,94 @@ API Changes
   whitespace characters on all built-in expressions defined
   in the pyparsing module.
 
+- ``camelCase`` names have been converted to PEP-8 ``snake_case`` names:
+
+        ==============================  ================================
+        Name                            Previous name
+        ------------------------------  --------------------------------
+        ParserElement
+        - parse_string                  parseString
+        - scan_string                   scanString
+        - search_string                 searchString
+        - transform_string              transformString
+        - add_condition                 addCondition
+        - add_parse_action              addParseAction
+        - can_parse_next                canParseNext
+        - default_name                  defaultName
+        - enable_left_recursion         enableLeftRecursion
+        - enable_packrat                enablePackrat
+        - ignore_whitespace             ignoreWhitespace
+        - inline_literals_using         inlineLiteralsUsing
+        - parse_file                    parseFile
+        - leave_whitespace              leaveWhitespace
+        - parse_string                  parseString
+        - parse_with_tabs               parseWithTabs
+        - reset_cache                   resetCache
+        - run_tests                     runTests
+        - scan_string                   scanString
+        - search_string                 searchString
+        - set_break                     setBreak
+        - set_debug                     setDebug
+        - set_debug_actions             setDebugActions
+        - set_default_whitespace_chars  setDefaultWhitespaceChars
+        - set_fail_action               setFailAction
+        - set_name                      setName
+        - set_parse_action              setParseAction
+        - set_results_name              setResultsName
+        - set_whitespace_chars          setWhitespaceChars
+        - transform_string              transformString
+        - try_parse                     tryParse
+
+        ParseResults
+        - as_list                       asList
+        - as_dict                       asDict
+        - get_name                      getName
+
+        any_open_tag                    anyOpenTag
+        any_close_tag                   anyCloseTag
+        c_style_comment                 cStyleComment
+        common_html_entity              commonHTMLEntity
+        condition_as_parse_action       conditionAsParseAction
+        counted_array                   countedArray
+        cpp_style_comment               cppStyleComment
+        dbl_quoted_string               dblQuotedString
+        dbl_slash_comment               dblSlashComment
+        delimited_list                  delimitedList
+        dict_of                         dictOf
+        html_comment                    htmlComment
+        infix_notation                  infixNotation
+        java_style_comment              javaStyleComment
+        line_end                        lineEnd
+        line_start                      lineStart
+        make_html_tags                  makeHTMLTags
+        make_xml_tags                   makeXMLTags
+        match_only_at_col               matchOnlyAtCol
+        match_previous_expr             matchPreviousExpr
+        match_previous_literal          matchPreviousLiteral
+        nested_expr                     nestedExpr
+        null_debug_action               nullDebugAction
+        one_of                          oneOf
+        OpAssoc                         opAssoc
+        original_text_for               originalTextFor
+        python_style_comment            pythonStyleComment
+        quoted_string                   quotedString
+        remove_quotes                   removeQuotes
+        replace_html_entity             replaceHTMLEntity
+        replace_with                    replaceWith
+        rest_of_line                    restOfLine
+        sgl_quoted_string               sglQuotedString
+        string_end                      stringEnd
+        string_start                    stringStart
+        token_map                       tokenMap
+        trace_parse_action              traceParseAction
+        unicode_string                  unicodeString
+        with_attribute                  withAttribute
+        with_class                      withClass
+        ==============================  ================================
+
+  Backward-compatibility synonyms will allow parsers written using the old
+  names to run, allowing developers to convert to the new names. The
+  synonyms will be removed in a future release.
 
 Discontinued Features
 =====================
@@ -326,7 +475,7 @@ Discontinued Features
 Python 2.x no longer supported
 ------------------------------
 Removed Py2.x support and other deprecated features. Pyparsing
-now requires Python 3.5 or later. If you are using an earlier
+now requires Python 3.6 or later. If you are using an earlier
 version of Python, you must use a Pyparsing 2.4.x version.
 
 Other discontinued features
@@ -394,5 +543,8 @@ And finally, many thanks to those who helped in the restructuring
 of the pyparsing code base as part of this release. Pyparsing now
 has more standard package structure, more standard unit tests,
 and more standard code formatting (using black). Special thanks
-to jdufresne, klahnakoski, mattcarmody, and ckeygusuz,
+to jdufresne, klahnakoski, mattcarmody, ckeygusuz,
 tmiguelt, and toonarmycaptain to name just a few.
+
+Thanks also to Michael Milton and Max Fischer, who added some
+significant new features to pyparsing.

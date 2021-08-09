@@ -38,16 +38,17 @@ class __config_flags:
 
 @lru_cache(maxsize=128)
 def col(loc, strg):
-    """Returns current column within a string, counting newlines as line separators.
-   The first column is number 1.
+    """
+    Returns current column within a string, counting newlines as line separators.
+    The first column is number 1.
 
-   Note: the default parsing behavior is to expand tabs in the input string
-   before starting the parsing process.  See
-   :class:`ParserElement.parseString` for more
-   information on parsing strings containing ``<TAB>`` s, and suggested
-   methods to maintain a consistent view of the parsed string, the parse
-   location, and line and column positions within the parsed string.
-   """
+    Note: the default parsing behavior is to expand tabs in the input string
+    before starting the parsing process.  See
+    :class:`ParserElement.parseString` for more
+    information on parsing strings containing ``<TAB>`` s, and suggested
+    methods to maintain a consistent view of the parsed string, the parse
+    location, and line and column positions within the parsed string.
+    """
     s = strg
     return 1 if 0 < loc < len(s) and s[loc - 1] == "\n" else loc - s.rfind("\n", 0, loc)
 
@@ -68,8 +69,9 @@ def lineno(loc, strg):
 
 @lru_cache(maxsize=128)
 def line(loc, strg):
-    """Returns the line of text containing loc within a string, counting newlines as line separators.
-       """
+    """
+    Returns the line of text containing loc within a string, counting newlines as line separators.
+    """
     lastCR = strg.rfind("\n", 0, loc)
     nextCR = strg.find("\n", loc)
     return strg[lastCR + 1 : nextCR] if nextCR >= 0 else strg[lastCR + 1 :]
@@ -119,6 +121,54 @@ class _FifoCache:
         self.clear = types.MethodType(clear, self)
 
 
+class LRUMemo:
+    """
+    A memoizing mapping that retains `capacity` deleted items
+
+    The memo tracks retained items by their access order; once `capacity` items
+    are retained, the least recently used item is discarded.
+    """
+
+    def __init__(self, capacity):
+        self._capacity = capacity
+        self._active = {}
+        self._memory = collections.OrderedDict()
+
+    def __getitem__(self, key):
+        try:
+            return self._active[key]
+        except KeyError:
+            self._memory.move_to_end(key)
+            return self._memory[key]
+
+    def __setitem__(self, key, value):
+        self._memory.pop(key, None)
+        self._active[key] = value
+
+    def __delitem__(self, key):
+        try:
+            value = self._active.pop(key)
+        except KeyError:
+            pass
+        else:
+            while len(self._memory) >= self._capacity:
+                self._memory.popitem(last=False)
+            self._memory[key] = value
+
+    def clear(self):
+        self._active.clear()
+        self._memory.clear()
+
+
+class UnboundedMemo(dict):
+    """
+    A memoizing mapping that retains all deleted items
+    """
+
+    def __delitem__(self, key):
+        pass
+
+
 def _escapeRegexRangeChars(s):
     # escape these chars: ^-[]
     for c in r"\^-[]":
@@ -150,7 +200,7 @@ def _collapseStringToRanges(s, re_escape=True):
         escape_re_range_char = no_escape_re_range_char
 
     ret = []
-    for _, chars in itertools.groupby(sorted(s), key=is_consecutive):
+    for _, chars in itertools.groupby(sorted(set(s)), key=is_consecutive):
         first = last = next(chars)
         last = collections.deque(itertools.chain(iter([last]), chars), maxlen=1).pop()
         if first == last:
