@@ -3,9 +3,10 @@
 from collections.abc import MutableMapping, Mapping, MutableSequence
 import pprint
 from weakref import ref as wkref
+from typing import Tuple, Any
 
 str_type = (str, bytes)
-_generator_type = type((x for x in ()))
+_generator_type = type((_ for _ in ()))
 
 
 class _ParseResultsWithOffset:
@@ -70,7 +71,7 @@ class ParseResults:
         - year: 1999
     """
 
-    _null_values = (None, "", [], ())
+    _null_values: Tuple[Any, ...] = (None, [], "", ())
 
     __slots__ = [
         "_name",
@@ -160,7 +161,7 @@ class ParseResults:
         self, toklist=None, name=None, asList=True, modal=True, isinstance=isinstance
     ):
         self._modal = modal
-        if name not in (None, ""):
+        if name is not None and name != "":
             if isinstance(name, int):
                 name = str(name)
             if not modal:

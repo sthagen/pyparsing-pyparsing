@@ -422,6 +422,8 @@ class TestParseAction(PyparsingExpressionTestCase):
 
 
 class TestResultsModifyingParseAction(PyparsingExpressionTestCase):
+    # do not make staticmethod
+    # @staticmethod
     def compute_stats_parse_action(t):
         # by the time this parse action is called, parsed numeric words
         # have been converted to ints by a previous parse action, so
@@ -486,6 +488,8 @@ class TestTransformStringUsingParseActions(PyparsingExpressionTestCase):
         "/": "I",
     }
 
+    # do not make staticmethod
+    # @staticmethod
     def markup_convert(t):
         htmltag = TestTransformStringUsingParseActions.markup_convert_map[
             t.markup_symbol

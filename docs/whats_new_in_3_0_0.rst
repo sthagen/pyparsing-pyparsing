@@ -4,7 +4,7 @@ What's New in Pyparsing 3.0.0
 
 :author: Paul McGuire
 
-:date: August, 2021
+:date: September, 2021
 
 :abstract: This document summarizes the changes made
     in the 3.0.0 release of pyparsing.
@@ -38,7 +38,7 @@ can now be written as::
 Pyparsing 3.0 will run both versions of this example.
 
 New code should be written using the PEP-8 compatible names. The compatibility
-synonyms will be removed in a future version.
+synonyms will be removed in a future version of pyparsing.
 
 
 Railroad diagramming
@@ -52,17 +52,19 @@ generator for documenting pyparsing parsers. You need to install
     # define a simple grammar for parsing street addresses such
     # as "123 Main Street"
     #     number word...
-    number = pp.Word(pp.nums).setName("number")
-    name = pp.Word(pp.alphas).setName("word")[1, ...]
+    number = pp.Word(pp.nums).set_name("number")
+    name = pp.Word(pp.alphas).set_name("word")[1, ...]
 
     parser = number("house_number") + name("street")
-    parser.setName("street address")
+    parser.set_name("street address")
 
     # construct railroad track diagram for this parser and
     # save as HTML
     parser.create_diagram('parser_rr_diag.html')
 
-(Contributed by Michael Milton)
+See more in the examples directory: ``make_diagram.py`` and ``railroad_diagram_demo.py``.
+
+(Railroad diagram enhancement contributed by Michael Milton)
 
 Support for left-recursive parsers
 ----------------------------------
@@ -73,7 +75,7 @@ the methods of the Python PEG parser, pyparsing uses a variation of
 packrat parsing to detect and handle left-recursion during parsing.::
 
     import pyparsing as pp
-    pp.ParserElement.enableLeftRecursion()
+    pp.ParserElement.enable_left_recursion()
 
     # a common left-recursion definition
     # define a list of items as 'list + item | item'
@@ -84,7 +86,7 @@ packrat parsing to detect and handle left-recursion during parsing.::
     item = pp.Word(pp.alphas)
     item_list <<= item_list + item | item
 
-    item_list.runTests("""\
+    item_list.run_tests("""\
         To parse or not to parse that is the question
         """)
 
@@ -92,9 +94,50 @@ Prints::
 
     ['To', 'parse', 'or', 'not', 'to', 'parse', 'that', 'is', 'the', 'question']
 
-See more examples in left_recursion.py in the pyparsing examples directory.
+See more examples in ``left_recursion.py`` in the pyparsing examples directory.
 
-(Contributed by Max Fischer)
+(LR parsing support contributed by Max Fischer)
+
+Packrat/memoization enable and disable methods
+----------------------------------------------
+As part of the implementation of left-recursion support, new methods have been added
+to enable and disable packrat parsing.
+
+======================  =======================================================
+Name                       Description
+----------------------  -------------------------------------------------------
+enable_packrat          Enable packrat parsing (with specified cache size)
+enable_left_recursion   Enable left-recursion cache
+disable_memoization     Disable all internal parsing caches
+======================  =======================================================
+
+Type annotations on all public methods
+--------------------------------------
+Python 3.6 and upward compatible type annotations have been added to most of the
+public methods in pyparsing. This should facilitate developing pyparsing-based
+applications using IDEs for development-time type checking.
+
+New string constants ``identchars`` and ``identbodychars`` to help in defining identifier Word expressions
+----------------------------------------------------------------------------------------------------------
+Two new module-level strings have been added to help when defining identifiers,
+``identchars`` and ``identbodychars``.
+
+Instead of writing::
+
+    import pyparsing as pp
+    identifier = pp.Word(pp.alphas + "_", pp.alphanums + "_")
+
+you will be able to write::
+
+    identifier = pp.Word(pp.indentchars, pp.identbodychars)
+
+Those constants have also been added to all the Unicode string classes::
+
+    import pyparsing as pp
+    ppu = pp.pyparsing_unicode
+
+    cjk_identifier = pp.Word(ppu.CJK.identchars, ppu.CJK.identbodychars)
+    greek_identifier = pp.Word(ppu.Greek.identchars, ppu.Greek.identbodychars)
 
 
 Refactored/added diagnostic flags
@@ -159,7 +202,7 @@ nesting level).
 For this code::
 
         wd = Word(alphas)
-        for match in locatedExpr(wd).searchString("ljsdf123lksdjjf123lkkjj1222"):
+        for match in locatedExpr(wd).search_string("ljsdf123lksdjjf123lkkjj1222"):
             print(match)
 
 the docs for ``locaatedExpr`` show this output::
@@ -169,7 +212,7 @@ the docs for ``locaatedExpr`` show this output::
         [[18, 'lkkjj', 23]]
 
 The parsed values and the start and end locations are merged into a single
-nested ParseResults (and any results names in the parsed values are also
+nested ``ParseResults`` (and any results names in the parsed values are also
 merged in with the start and end location names).
 
 Using ``Located``, the output is::
@@ -220,7 +263,7 @@ deprecated in a future release.
 Shortened tracebacks
 --------------------
 Cleaned up default tracebacks when getting a ``ParseException`` when calling
-``parseString``. Exception traces should now stop at the call in ``parseString``,
+``parse_string``. Exception traces should now stop at the call in ``parse_string``,
 and not include the internal pyparsing traceback frames. (If the full traceback
 is desired, then set ``ParserElement.verbose_traceback`` to ``True``.)
 
@@ -228,7 +271,7 @@ Improved debug logging
 ----------------------
 Debug logging has been improved by:
 
-- Including try/match/fail logging when getting results from the
+- Including ``try/match/fail`` logging when getting results from the
   packrat cache (previously cache hits did not show debug logging).
   Values returned from the packrat cache are marked with an '*'.
 
@@ -237,8 +280,8 @@ Debug logging has been improved by:
 
 New / improved examples
 -----------------------
-- ``number_words.py`` includes a parser/evaluator to parse "forty-two"
-  and return 42. Also includes example code to generate a railroad
+- ``number_words.py`` includes a parser/evaluator to parse ``"forty-two"``
+  and return ``42``. Also includes example code to generate a railroad
   diagram for this parser.
 
 - ``BigQueryViewParser.py`` added to examples directory, submitted
@@ -267,12 +310,38 @@ Other new features
   to optionally parse an additional delimiter at the end of the list.
   Submitted by Kazantcev Andrey.
 
-- Enhanced default strings created for Word expressions, now showing
+- Enhanced default strings created for ``Word`` expressions, now showing
   string ranges if possible. ``Word(alphas)`` would formerly
   print as ``W:(ABCD...)``, now prints as ``W:(A-Za-z)``.
 
-- Added ``ignoreWhitespace(recurse:bool = True)`` and added a
-  ``recurse`` argument to ``leaveWhitespace``, both added to provide finer
+- Better exception messages to show full word where an exception occurred.::
+
+      Word(alphas)[...].parse_string("abc 123", parse_all=True)
+
+  Was::
+
+      pyparsing.ParseException: Expected end of text, found '1'  (at char 4), (line:1, col:5)
+
+  Now::
+
+      pyparsing.exceptions.ParseException: Expected end of text, found '123'  (at char 4), (line:1, col:5)
+
+- Using ``...`` for ``SkipTo`` can now be wrapped in ``Suppress`` to suppress
+  the skipped text from the returned parse results.::
+
+     source = "lead in START relevant text END trailing text"
+     start_marker = Keyword("START")
+     end_marker = Keyword("END")
+     find_body = Suppress(...) + start_marker + ... + end_marker
+     print(find_body.parse_string(source).dump())
+
+  Prints::
+
+      ['START', 'relevant text ', 'END']
+      - _skipped: ['relevant text ']
+
+- Added ``ignore_whitespace(recurse:bool = True)`` and added a
+  ``recurse`` argument to ``leave_whitespace``, both added to provide finer
   control over pyparsing's whitespace skipping. Contributed by
   Michael Milton.
 
@@ -288,7 +357,7 @@ Other new features
   and was easily misinterpreted as a ``tuple`` containing a ``list`` and
   a ``dict``.
 
-- Minor reformatting of output from ``runTests`` to make embedded
+- Minor reformatting of output from ``run_tests`` to make embedded
   comments more visible.
 
 - New ``pyparsing_test`` namespace, assert methods and classes added to support writing
@@ -323,7 +392,10 @@ Other new features
 - Potential performance enhancement when parsing ``Word``
   expressions built from ``pyparsing_unicode`` character sets. ``Word`` now
   internally converts ranges of consecutive characters to regex
-  character ranges (converting "0123456789" to "0-9" for instance).
+  character ranges (converting ``"0123456789"`` to ``"0-9"`` for instance).
+
+- Added a caseless parameter to the `CloseMatch` class to allow for casing to be
+  ignored when checking for close matches. Contributed by Adrian Edwards.
 
 
 API Changes
@@ -334,7 +406,7 @@ API Changes
   to ``True`` or ``False``). ``enable_all_warnings()`` has
   also been added.
 
-- ``countedArray`` formerly returned its list of items nested
+- ``counted_array`` formerly returned its list of items nested
   within another list, so that accessing the items required
   indexing the 0'th element to get the actual list. This
   extra nesting has been removed. In addition, if there are
@@ -347,7 +419,7 @@ API Changes
 
         expr = pp.Word(pp.nums) * 3
         try:
-            expr.parseString("123 456 A789")
+            expr.parse_string("123 456 A789")
         except pp.ParseException as pe:
             print(pe.explain(depth=0))
 
@@ -355,7 +427,7 @@ API Changes
 
         123 456 A789
                 ^
-        ParseException: Expected W:(0-9), found 'A'  (at char 8), (line:1, col:9)
+        ParseException: Expected W:(0-9), found 'A789'  (at char 8), (line:1, col:9)
 
   To run explain against other exceptions, use
   ``ParseException.explain_exception()``.
@@ -373,10 +445,10 @@ API Changes
   will now always return ``True``. This code will need to change to
   ``"if name in results and results[name]:"`` or just
   ``"if results[name]:"``. Also, any parser unit tests that check the
-  ``asDict()`` contents will now see additional entries for parsers
+  ``as_dict()`` contents will now see additional entries for parsers
   having named ``ZeroOrMore`` expressions, whose values will be ``[]``.
 
-- ``ParserElement.setDefaultWhitespaceChars`` will now update
+- ``ParserElement.set_default_whitespace_chars`` will now update
   whitespace characters on all built-in expressions defined
   in the pyparsing module.
 
@@ -482,18 +554,18 @@ Other discontinued features
 ---------------------------
 - ``ParseResults.asXML()`` - if used for debugging, switch
   to using ``ParseResults.dump()``; if used for data transfer,
-  use ``ParseResults.asDict()`` to convert to a nested Python
+  use ``ParseResults.as_dict()`` to convert to a nested Python
   dict, which can then be converted to XML or JSON or
   other transfer format
 
 - ``operatorPrecedence`` synonym for ``infixNotation`` -
-  convert to calling ``infixNotation``
+  convert to calling ``infix_notation``
 
 - ``commaSeparatedList`` - convert to using
   ``pyparsing_common.comma_separated_list``
 
 - ``upcaseTokens`` and ``downcaseTokens`` - convert to using
-  ``pyparsing_common.upcaseTokens`` and ``downcaseTokens``
+  ``pyparsing_common.upcase_tokens`` and ``downcase_tokens``
 
 - ``__compat__.collect_all_And_tokens`` will not be settable to
   ``False`` to revert to pre-2.3.1 results name behavior -

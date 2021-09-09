@@ -4,6 +4,8 @@ import types
 import collections
 import itertools
 from functools import lru_cache
+from typing import List
+
 
 _bslash = chr(92)
 
@@ -11,8 +13,8 @@ _bslash = chr(92)
 class __config_flags:
     """Internal class for defining compatibility and debugging flags"""
 
-    _all_names = []
-    _fixed_names = []
+    _all_names: List[str] = []
+    _fixed_names: List[str] = []
     _type_desc = "configuration"
 
     @classmethod
@@ -200,15 +202,24 @@ def _collapseStringToRanges(s, re_escape=True):
         escape_re_range_char = no_escape_re_range_char
 
     ret = []
-    for _, chars in itertools.groupby(sorted(set(s)), key=is_consecutive):
-        first = last = next(chars)
-        last = collections.deque(itertools.chain(iter([last]), chars), maxlen=1).pop()
-        if first == last:
-            ret.append(escape_re_range_char(first))
-        else:
-            ret.append(
-                "{}-{}".format(escape_re_range_char(first), escape_re_range_char(last))
-            )
+    s = sorted(set(s))
+    if len(s) > 3:
+        for _, chars in itertools.groupby(s, key=is_consecutive):
+            first = last = next(chars)
+            last = collections.deque(
+                itertools.chain(iter([last]), chars), maxlen=1
+            ).pop()
+            if first == last:
+                ret.append(escape_re_range_char(first))
+            else:
+                ret.append(
+                    "{}-{}".format(
+                        escape_re_range_char(first), escape_re_range_char(last)
+                    )
+                )
+    else:
+        ret = [escape_re_range_char(c) for c in s]
+
     return "".join(ret)
 
 

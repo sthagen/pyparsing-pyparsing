@@ -3,6 +3,7 @@ from .core import *
 from .helpers import delimited_list, any_open_tag, any_close_tag
 from datetime import datetime
 
+
 # some other useful expressions - using lower-case class name since we are really using this as a namespace
 class pyparsing_common:
     """Here are some common low-level expressions that may be useful in
@@ -180,7 +181,7 @@ class pyparsing_common:
         + signed_integer().set_parse_action(convert_to_float)
     ).set_name("fraction")
     """fractional expression of an integer divided by an integer, returns a float"""
-    fraction.add_parse_action(lambda t: t[0] / t[-1])
+    fraction.add_parse_action(lambda tt: tt[0] / tt[-1])
 
     mixed_integer = (
         fraction | signed_integer + Opt(Opt("-").suppress() + fraction)
@@ -204,7 +205,7 @@ class pyparsing_common:
     scientific notation and returns a float"""
 
     # streamlining this expression makes the docs nicer-looking
-    number = (sci_real | real | signed_integer).streamline()
+    number = (sci_real | real | signed_integer).setName("number").streamline()
     """any numeric expression, returns the corresponding Python type"""
 
     fnumber = (
@@ -214,7 +215,7 @@ class pyparsing_common:
     )
     """any int or real number, returned as float"""
 
-    identifier = Word(alphas + "_", alphanums + "_").set_name("identifier")
+    identifier = Word(identchars, identbodychars).set_name("identifier")
     """typical code identifier (leading alpha or '_', followed by 0 or more alphas, nums, or '_')"""
 
     ipv4_address = Regex(
@@ -248,7 +249,7 @@ class pyparsing_common:
     "MAC address xx:xx:xx:xx:xx (may also have '-' or '.' delimiters)"
 
     @staticmethod
-    def convert_to_date(fmt="%Y-%m-%d"):
+    def convert_to_date(fmt: str = "%Y-%m-%d"):
         """
         Helper to create a parse action for converting parsed date string to Python datetime.date
 
@@ -266,16 +267,16 @@ class pyparsing_common:
             [datetime.date(1999, 12, 31)]
         """
 
-        def cvt_fn(s, l, t):
+        def cvt_fn(ss, ll, tt):
             try:
-                return datetime.strptime(t[0], fmt).date()
+                return datetime.strptime(tt[0], fmt).date()
             except ValueError as ve:
-                raise ParseException(s, l, str(ve))
+                raise ParseException(ss, ll, str(ve))
 
         return cvt_fn
 
     @staticmethod
-    def convert_to_datetime(fmt="%Y-%m-%dT%H:%M:%S.%f"):
+    def convert_to_datetime(fmt: str = "%Y-%m-%dT%H:%M:%S.%f"):
         """Helper to create a parse action for converting parsed
         datetime string to Python datetime.datetime
 
@@ -317,7 +318,7 @@ class pyparsing_common:
     _html_stripper = any_open_tag.suppress() | any_close_tag.suppress()
 
     @staticmethod
-    def strip_html_tags(s, l, tokens):
+    def strip_html_tags(s: str, l: int, tokens: ParseResults):
         """Parse action to remove HTML tags from web page HTML source
 
         Example::
@@ -356,6 +357,54 @@ class pyparsing_common:
 
     downcase_tokens = staticmethod(token_map(lambda t: t.lower()))
     """Parse action to convert tokens to lower case."""
+
+    url = Regex(
+        # https://mathiasbynens.be/demo/url-regex
+        # https://gist.github.com/dperini/729294
+        r"^" +
+        # protocol identifier (optional)
+        # short syntax // still required
+        r"(?:(?:(?P<scheme>https?|ftp):)?\/\/)" +
+        # user:pass BasicAuth (optional)
+        r"(?:(?P<auth>\S+(?::\S*)?)@)?" +
+        r"(?P<host>" +
+        # IP address exclusion
+        # private & local networks
+        r"(?!(?:10|127)(?:\.\d{1,3}){3})" +
+        r"(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})" +
+        r"(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})" +
+        # IP address dotted notation octets
+        # excludes loopback network 0.0.0.0
+        # excludes reserved space >= 224.0.0.0
+        # excludes network & broadcast addresses
+        # (first & last IP address of each class)
+        r"(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])" +
+        r"(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}" +
+        r"(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))" +
+        r"|" +
+        # host & domain names, may end with dot
+        # can be replaced by a shortest alternative
+        # (?![-_])(?:[-\w\u00a1-\uffff]{0,63}[^-_]\.)+
+        r"(?:" +
+        r"(?:" +
+        r"[a-z0-9\u00a1-\uffff]" +
+        r"[a-z0-9\u00a1-\uffff_-]{0,62}" +
+        r")?" +
+        r"[a-z0-9\u00a1-\uffff]\." +
+        r")+" +
+        # TLD identifier name, may end with dot
+        r"(?:[a-z\u00a1-\uffff]{2,}\.?)" +
+        r")" +
+        # port number (optional)
+        r"(?P<port>:\d{2,5})?" +
+        # resource path (optional)
+        r"(?P<path>\/[^?# ]*)?" +
+        # query string (optional)
+        r"(?P<query>\?[^#]*)?" +
+        # fragment (optional)
+        r"(?P<fragment>#\S*)?" +
+        r"$"
+    ).set_name("url")
 
     # pre-PEP8 compatibility names
     convertToInteger = convert_to_integer

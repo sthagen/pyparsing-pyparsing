@@ -45,7 +45,7 @@ and the strings are auto-converted to :class:`Literal` expressions)::
     greet = Word(alphas) + "," + Word(alphas) + "!"
 
     hello = "Hello, World!"
-    print(hello, "->", greet.parseString(hello))
+    print(hello, "->", greet.parse_string(hello))
 
 The program outputs the following::
 
@@ -96,14 +96,20 @@ classes inherit from. Use the docstrings for examples of how to:
 from collections import namedtuple
 
 version_info = namedtuple("version_info", "major minor micro release_level serial")
-__version_info__ = version_info(3, 0, 0, "candidate", 1)
+__version_info__ = version_info(3, 0, 0, "candidate", 2)
 __version__ = (
     "{}.{}.{}".format(*__version_info__[:3])
-    + ("{}{}".format(__version_info__.release_level[0], __version_info__.serial), "")[
-        __version_info__.release_level == "final"
-    ]
+    + (
+        "{}{}{}".format(
+            "r" if __version_info__.release_level[0] == "c" else "",
+            __version_info__.release_level[0],
+            __version_info__.serial,
+        ),
+        "",
+    )[__version_info__.release_level == "final"]
 )
-__versionTime__ = "8 August 2021 13:45 UTC"
+__version_time__ = "9 September 2021 02:30 UTC"
+__versionTime__ = __version_time__
 __author__ = "Paul McGuire <ptmcg@users.sourceforge.net>"
 
 from .util import *
@@ -124,16 +130,19 @@ from .common import (
 )
 
 # define backward compat synonyms
-pyparsing_unicode = unicode
-pyparsing_common = common
-pyparsing_test = testing
+if "pyparsing_unicode" not in globals():
+    pyparsing_unicode = unicode
+if "pyparsing_common" not in globals():
+    pyparsing_common = common
+if "pyparsing_test" not in globals():
+    pyparsing_test = testing
 
 core_builtin_exprs += common_builtin_exprs + helper_builtin_exprs
 
 
 __all__ = [
     "__version__",
-    "__versionTime__",
+    "__version_time__",
     "__author__",
     "__compat__",
     "__diag__",
@@ -205,6 +214,8 @@ __all__ = [
     "empty",
     "hexnums",
     "html_comment",
+    "identchars",
+    "identbodychars",
     "java_style_comment",
     "line",
     "line_end",
@@ -248,6 +259,7 @@ __all__ = [
     "condition_as_parse_action",
     "pyparsing_test",
     # pre-PEP8 compatibility names
+    "__versionTime__",
     "anyCloseTag",
     "anyOpenTag",
     "cStyleComment",
