@@ -3,10 +3,10 @@ Using the pyparsing module
 ==========================
 
 :author: Paul McGuire
-:address: ptmcg@users.sourceforge.net
+:address: ptmcg.pm+pyparsing@gmail.com
 
-:revision: 3.0.1
-:date: September, 2021
+:revision: 3.0.0
+:date: October, 2021
 
 :copyright: Copyright |copy| 2003-2021 Paul McGuire.
 
@@ -790,6 +790,18 @@ Other classes
       using ``pop()``, or any element can be extracted and removed
       using ``pop(n)``
 
+    - a nested ParseResults_ can be created by using the pyparsing ``Group`` class
+      around elements in an expression::
+
+          Word(alphas) + Group(Word(nums)[...]) + Word(alphas)
+
+      will parse the string "abc 100 200 300 end" as::
+
+          ['abc', ['100', '200', '300'], 'end']
+
+      If the ``Group`` is constructed using ``aslist=True``, the resulting tokens
+      will be a Python list instead of a ParseResults_.
+
   - as a dictionary
 
     - if ``set_results_name()`` is used to name elements within the
@@ -800,7 +812,8 @@ Other classes
       input text - in addition to ParseResults_ listed as ``[ [ a1, b1, c1, ...], [ a2, b2, c2, ...]  ]``
       it also acts as a dictionary with entries defined as ``{ a1 : [ b1, c1, ... ] }, { a2 : [ b2, c2, ... ] }``;
       this is especially useful when processing tabular data where the first column contains a key
-      value for that line of data
+      value for that line of data; when constructed with ``aslist=True``, will
+      return an actual Python ``dict`` instead of a ParseResults_.
 
     - list elements that are deleted using ``del`` will still be accessible by their
       dictionary keys
@@ -900,6 +913,41 @@ Exception classes and Troubleshooting
   and ``set_debug()``, or test the matching of expression fragments by testing them using
   ``search_string()`` or ``scan_string()``.
 
+- Use ``with_line_numbers`` from ``pyparsing_testing`` to display the input string
+  being parsed, with line and column numbers that correspond to the values reported
+  in set_debug() output::
+
+      import pyparsing as pp
+      ppt = pp.testing
+
+      data = """\
+         A
+            100"""
+
+      expr = pp.Word(pp.alphanums).set_name("word").set_debug()
+      print(ppt.with_line_numbers(data))
+      expr[...].parseString(data)
+
+  prints::
+
+      .          1
+        1234567890
+      1:   A|
+      2:      100|
+
+      Match word at loc 3(1,4)
+          A
+          ^
+      Matched word -> ['A']
+      Match word at loc 11(2,7)
+             100
+             ^
+      Matched word -> ['100']
+
+  `with_line_numbers` has several options for displaying control characters, end-of-line
+  and space markers, Unicode symbols for control characters - these are documented in the
+  function's docstring.
+
 - Diagnostics can be enabled using ``pyparsing.enable_diag`` and passing
   one of the following enum values defined in ``pyparsing.Diagnostics``
 
@@ -936,6 +984,9 @@ Exception classes and Troubleshooting
     >>> UserWarning: warn_name_set_on_empty_Forward: setting results name 'recursive_expr'
                      on Forward expression that has no contained expression
 
+  Warnings can also be enabled using the Python ``-W`` switch, or setting a non-empty
+  value to the environment variable ``PYPARSINGENABLEALLWARNINGS``
+
 
 Miscellaneous attributes and methods
 ====================================
@@ -949,7 +1000,8 @@ Helper methods
   only the separate list elements.  Can optionally specify ``combine=True``,
   indicating that the expressions and delimiters should be returned as one
   combined value (useful for scoped variables, such as ``"a.b.c"``, or
-  ``"a::b::c"``, or paths such as ``"a/b/c"``).
+  ``"a::b::c"``, or paths such as ``"a/b/c"``). Can also optionally specify
+  ``allow_trailing_delim`` to accept a trailing delimiter at the end of the list.
 
 - ``counted_array(expr)`` - convenience function for a pattern where an list of
   instances of the given expression are preceded by an integer giving the count of
@@ -1132,15 +1184,24 @@ Helper parse actions
   ensure that an attribute is present but any attribute value is
   acceptable.
 
-- ``downcase_tokens`` - converts all matched tokens to lowercase
-
-- ``upcase_tokens`` - converts all matched tokens to uppercase
-
 - ``match_only_at_col(column_number)`` - a parse action that verifies that
   an expression was matched at a particular column, raising a
   ``ParseException`` if matching at a different column number; useful when parsing
   tabular data
 
+- ``common.convert_to_integer()`` - converts all matched tokens to uppercase
+
+- ``common.convert_to_float()`` - converts all matched tokens to uppercase
+
+- ``common.convert_to_date()`` - converts matched token to a datetime.date
+
+- ``common.convert_to_datetime()`` - converts matched token to a datetime.datetime
+
+- ``common.strip_html_tags()`` - removes HTML tags from matched token
+
+- ``common.downcase_tokens()`` - converts all matched tokens to lowercase
+
+- ``common.upcase_tokens()`` - converts all matched tokens to uppercase
 
 
 Common string and token constants
@@ -1181,6 +1242,42 @@ Common string and token constants
 - ``rest_of_line`` - all remaining printable characters up to but not including the next
   newline
 
+- ``common.integer`` - an integer with no leading sign; parsed token is converted to int
+
+- ``common.hex_integer`` - a hexadecimal integer; parsed token is converted to int
+
+- ``common.signed_integer`` - an integer with optional leading sign; parsed token is converted to int
+
+- ``common.fraction`` - signed_integer '/' signed_integer; parsed tokens are converted to float
+
+- ``common.mixed_integer`` - signed_integer '-' fraction; parsed tokens are converted to float
+
+- ``common.real`` - real number; parsed tokens are converted to float
+
+- ``common.sci_real`` - real number with optional scientific notation; parsed tokens are convert to float
+
+- ``common.number`` - any numeric expression; parsed tokens are returned as converted by the matched expression
+
+- ``common.fnumber`` - any numeric expression; parsed tokens are converted to float
+
+- ``common.identifier`` - a programming identifier (follows Python's syntax convention of leading alpha or "_",
+  followed by 0 or more alpha, num, or "_")
+
+- ``common.ipv4_address`` - IPv4 address
+
+- ``common.ipv6_address`` - IPv6 address
+
+- ``common.mac_address`` - MAC address (with ":", "-", or "." delimiters)
+
+- ``common.iso8601_date`` - date in ``YYYY-MM-DD`` format
+
+- ``common.iso8601_datetime`` - datetime in ``YYYY-MM-DDThh:mm:ss.s(Z|+-00:00)`` format; trailing seconds,
+  milliseconds, and timezone optional; accepts separating ``'T'`` or ``' '``
+
+- ``common.url`` - matches URL strings and returns a ParseResults with named fields like those returned
+  by ``urllib.parse.urlparse()``
+
+
 Generating Railroad Diagrams
 ============================
 Grammars are conventionally represented in what are called "railroad diagrams", which allow you to visually follow
@@ -1201,10 +1298,25 @@ Create your parser as you normally would. Then call ``create_diagram()``, passin
 
 This will result in the railroad diagram being written to ``street_address_diagram.html``.
 
+Diagrams usually will vertically wrap expressions containing more than 3 terms. You can override this by
+passing the `vertical` argument to `create_diagram` with a larger value.
+
 Example
 -------
 You can view an example railroad diagram generated from `a pyparsing grammar for
 SQL SELECT statements <_static/sql_railroad.html>`_.
+
+Naming tip
+----------
+Parser elements that are separately named will be broken out as their own sub-diagrams. As a short-cut alternative
+to going through and adding ``.set_name()`` calls on all your sub-expressions, you can use ``autoname_elements()`` after
+defining your complete grammar. For example::
+
+            a = pp.Literal("a")
+            b = pp.Literal("b").set_name("bbb")
+            pp.autoname_elements()
+
+`a` will get named "a", while `b` will keep its name "bbb".
 
 Customization
 -------------

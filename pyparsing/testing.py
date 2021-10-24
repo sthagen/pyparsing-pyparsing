@@ -1,6 +1,7 @@
 # testing.py
 
 from contextlib import contextmanager
+from typing import Optional
 
 from .core import (
     ParserElement,
@@ -19,12 +20,12 @@ class pyparsing_test:
     class reset_pyparsing_context:
         """
         Context manager to be used when writing unit tests that modify pyparsing config values:
-         - packrat parsing
-         - bounded recursion parsing
-         - default whitespace characters.
-         - default keyword characters
-         - literal string auto-conversion class
-         - __diag__ settings
+        - packrat parsing
+        - bounded recursion parsing
+        - default whitespace characters.
+        - default keyword characters
+        - literal string auto-conversion class
+        - __diag__ settings
 
         Example::
 
@@ -147,6 +148,8 @@ class pyparsing_test:
             result = expr.parse_string(test_string, parse_all=True)
             if verbose:
                 print(result.dump())
+            else:
+                print(result.as_list())
             self.assertParseResultsEquals(result, expected_list=expected_list, msg=msg)
 
         def assertParseAndCheckDict(
@@ -159,6 +162,8 @@ class pyparsing_test:
             result = expr.parse_string(test_string, parseAll=True)
             if verbose:
                 print(result.dump())
+            else:
+                print(result.as_list())
             self.assertParseResultsEquals(result, expected_dict=expected_dict, msg=msg)
 
         def assertRunTestResults(
@@ -228,3 +233,86 @@ class pyparsing_test:
         def assertRaisesParseException(self, exc_type=ParseException, msg=None):
             with self.assertRaises(exc_type, msg=msg):
                 yield
+
+    @staticmethod
+    def with_line_numbers(
+        s: str,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        expand_tabs: bool = True,
+        eol_mark: str = "|",
+        mark_spaces: Optional[str] = None,
+        mark_control: Optional[str] = None,
+    ) -> str:
+        """
+        Helpful method for debugging a parser - prints a string with line and column numbers.
+        (Line and column numbers are 1-based.)
+
+        :param s: tuple(bool, str - string to be printed with line and column numbers
+        :param start_line: int - (optional) starting line number in s to print (default=1)
+        :param end_line: int - (optional) ending line number in s to print (default=len(s))
+        :param expand_tabs: bool - (optional) expand tabs to spaces, to match the pyparsing default
+        :param eol_mark: str - (optional) string to mark the end of lines, helps visualize trailing spaces (default="|")
+        :param mark_spaces: str - (optional) special character to display in place of spaces
+        :param mark_control: str - (optional) convert non-printing control characters to a placeholding
+                                 character; valid values:
+                                 - "unicode" - replaces control chars with Unicode symbols, such as "␍" and "␊"
+                                 - any single character string - replace control characters with given string
+                                 - None (default) - string is displayed as-is
+
+        :return: str - input string with leading line numbers and column number headers
+        """
+        if expand_tabs:
+            s = s.expandtabs()
+        if mark_control is not None:
+            if mark_control == "unicode":
+                tbl = str.maketrans(
+                    {c: u for c, u in zip(range(0, 33), range(0x2400, 0x2433))}
+                    | {127: 0x2421}
+                )
+                eol_mark = ""
+            else:
+                tbl = str.maketrans(
+                    {c: mark_control for c in list(range(0, 32)) + [127]}
+                )
+            s = s.translate(tbl)
+        if mark_spaces is not None and mark_spaces != " ":
+            if mark_spaces == "unicode":
+                tbl = str.maketrans({9: 0x2409, 32: 0x2423})
+                s = s.translate(tbl)
+            else:
+                s = s.replace(" ", mark_spaces)
+        if start_line is None:
+            start_line = 1
+        if end_line is None:
+            end_line = len(s)
+        end_line = min(end_line, len(s))
+        start_line = min(max(1, start_line), end_line)
+
+        if mark_control != "unicode":
+            s_lines = s.splitlines()[start_line - 1 : end_line]
+        else:
+            s_lines = [line+"␊" for line in s.split("␊")[start_line - 1 : end_line]]
+        if not s_lines:
+            return ""
+
+        lineno_width = len(str(end_line))
+        max_line_len = max(len(line) for line in s_lines)
+        lead = " " * (lineno_width + 1)
+        header1 = (
+            lead
+            + "".join(
+                "         {}".format(i + 1) for i in range(-(-max_line_len // 10))
+            )
+            + "\n"
+        )
+        header2 = lead + "1234567890" * (-(-max_line_len // 10)) + "\n"
+        return (
+            header1
+            + header2
+            + "\n".join(
+                "{:{}d}:{}{}".format(i, lineno_width, line, eol_mark)
+                for i, line in enumerate(s_lines, start=start_line)
+            )
+            + "\n"
+        )

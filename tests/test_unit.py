@@ -102,6 +102,37 @@ class Test01_PyparsingTestInit(TestCase):
         print("Python version", sys.version)
 
 
+class Test01a_PyparsingEnvironmentTests(TestCase):
+    def runTest(self):
+        # test warnings enable detection
+        tests = [
+            (([], "",), False),
+            ((["d", ], "",), True),
+            ((["d", "i:::pyparsing", ], "",), False),
+            ((["d:::pyparsing", ], "",), True),
+            ((["d:::pyparsing", "i", ], "",), False),
+            ((["d:::blah", ], "",), False),
+            ((["i", ], "",), False),
+            (([], "1",), True),
+            ((["d", ], "1",), True),
+            ((["d", "i:::pyparsing", ], "1",), False),
+            ((["d:::pyparsing", ], "1",), True),
+            ((["d:::pyparsing", "i", ], "1",), False),
+            ((["d:::blah", ], "1",), True),
+            ((["i", ], "1",), False),
+        ]
+
+        all_success = True
+        for args, expected in tests:
+            message = "{} should be {}".format(args, expected)
+            print(message, end=" -> ")
+            actual = pp.core._should_enable_warnings(*args)
+            print("PASS" if actual == expected else "FAIL")
+            if actual != expected:
+                all_success = False
+        self.assertTrue(all_success, "failed warnings enable test")
+
+
 class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
     suite_context = None
     save_suite_context = None
@@ -1860,6 +1891,31 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         self.assertParseResultsEquals(testVal, expected_list=expected)
 
+    def testHTMLEntities(self):
+        html_source = dedent("""\
+        This &amp; that
+        2 &gt; 1
+        0 &lt; 1
+        Don&apos;t get excited!
+        I said &quot;Don&apos;t get excited!&quot;
+        Copyright &copy; 2021
+        Dot &longrightarrow; &dot;
+        """)
+        transformer = pp.common_html_entity.add_parse_action(pp.replace_html_entity)
+        transformed = transformer.transform_string(html_source)
+        print(transformed)
+
+        expected = dedent("""\
+        This & that
+        2 > 1
+        0 < 1
+        Don't get excited!
+        I said "Don't get excited!"
+        Copyright © 2021
+        Dot ⟶ ˙
+        """)
+        self.assertEqual(expected, transformed)
+
     def testInfixNotationBasicArithEval(self):
         import ast
 
@@ -2356,11 +2412,21 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         #
         # behavior of ParseResults code changed with Python 3.9
 
-        results_with_int = pp.ParseResults(toklist=int, name='type_', asList=False)
+        results_with_int = pp.ParseResults(toklist=int, name="type_", asList=False)
         self.assertEqual(int, results_with_int["type_"])
 
-        results_with_tuple = pp.ParseResults(toklist=tuple, name='type_', asList=False)
+        results_with_tuple = pp.ParseResults(toklist=tuple, name="type_", asList=False)
         self.assertEqual(tuple, results_with_tuple["type_"])
+
+    def testParseResultsReturningDunderAttribute(self):
+        # from Issue #208
+        parser = pp.Word(pp.alphas)("A")
+        result = parser.parseString("abc")
+        print(result.dump())
+        self.assertEqual("abc", result.A)
+        self.assertEqual("", result.B)
+        with self.assertRaises(AttributeError):
+            result.__xyz__
 
     def testMatchOnlyAtCol(self):
         """successfully use matchOnlyAtCol helper function"""
@@ -2467,12 +2533,6 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
     def testParserElementMulOperatorWithTuples(self):
         """test ParserElement "*" with various tuples"""
 
-        # ParserElement * (0, 0)
-        with self.assertRaises(
-            ValueError, msg="ParserElement * (0,0) should raise error"
-        ):
-            expr = pp.Word(pp.alphas)("first") + pp.Word(pp.nums)("second*") * (0, 0)
-
         # ParserElement * (None, n)
         expr = pp.Word(pp.alphas)("first") + pp.Word(pp.nums)("second*") * (None, 3)
 
@@ -2545,6 +2605,22 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             TypeError, msg="ParserElement * (str, str) should raise error"
         ):
             expr = pp.Word(pp.alphas)("first") + pp.Word(pp.nums)("second") * ("2", "3")
+
+    def testParserElementMulByZero(self):
+        alpwd = pp.Word(pp.alphas)
+        numwd = pp.Word(pp.nums)
+
+        test_string = "abd def ghi jkl"
+
+        parser = alpwd * 2 + numwd * 0 + alpwd * 2
+        self.assertParseAndCheckList(
+            parser, test_string, expected_list=test_string.split()
+        )
+
+        parser = alpwd * 2 + numwd * (0, 0) + alpwd * 2
+        self.assertParseAndCheckList(
+            parser, test_string, expected_list=test_string.split()
+        )
 
     def testParserElementMulOperatorWithOtherTypes(self):
         """test the overridden "*" operator with other data types"""
@@ -3471,6 +3547,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             success = test_patt.runTests(fail_tests, failureTests=True)[0]
             self.assertTrue(success, "failed LineStart failure mode tests (3)")
 
+    def testLineStart2(self):
+
         test = """\
         AAA 1
         AAA 2
@@ -3484,21 +3562,89 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         test = dedent(test)
         print(test)
 
+        print("normal parsing")
         for t, s, e in (pp.LineStart() + "AAA").scanString(test):
-            print(s, e, pp.lineno(s, test), pp.line(s, test), ord(test[s]))
+            print(s, e, pp.lineno(s, test), pp.line(s, test), repr(test[s]))
             print()
             self.assertEqual(
                 "A", test[s], "failed LineStart with insignificant newlines"
             )
 
+        print(r"parsing without \n in whitespace chars")
         with ppt.reset_pyparsing_context():
             pp.ParserElement.setDefaultWhitespaceChars(" ")
             for t, s, e in (pp.LineStart() + "AAA").scanString(test):
-                print(s, e, pp.lineno(s, test), pp.line(s, test), ord(test[s]))
+                print(s, e, pp.lineno(s, test), pp.line(s, test), repr(test[s]))
                 print()
                 self.assertEqual(
                     "A", test[s], "failed LineStart with insignificant newlines"
                 )
+
+    def testLineStart3(self):
+        # testing issue #272
+        instring = dedent(
+            """
+        a
+         b
+          c
+        d
+        e
+         f
+          g
+        """
+        )
+        print(pp.testing.with_line_numbers(instring))
+
+        alpha_line = (
+            pp.LineStart().leaveWhitespace()
+            + pp.Word(pp.alphas)
+            + pp.LineEnd().suppress()
+        )
+
+        tests = [
+            alpha_line,
+            pp.Group(alpha_line),
+            alpha_line | pp.Word("_"),
+            alpha_line | alpha_line,
+            pp.MatchFirst([alpha_line, alpha_line]),
+            pp.LineStart() + pp.Word(pp.alphas) + pp.LineEnd().suppress(),
+            pp.And([pp.LineStart(), pp.Word(pp.alphas), pp.LineEnd().suppress()]),
+        ]
+        for test in tests:
+            print(test.searchString(instring))
+            self.assertEqual(
+                ["a", "d", "e"], flatten(sum(test.search_string(instring)).as_list())
+            )
+
+    def testLineStart4(self):
+        test = dedent(
+            """\
+        AAA this line
+        AAA and this line
+          AAA but not this one
+        B AAA and definitely not this one
+        """
+        )
+
+        expr = pp.AtLineStart("AAA") + pp.restOfLine
+        for t in expr.search_string(test):
+            print(t)
+
+        self.assertEqual(
+            ["AAA", " this line", "AAA", " and this line"],
+            sum(expr.search_string(test)).as_list(),
+        )
+
+    def testStringStart(self):
+        self.assertParseAndCheckList(pp.AtStringStart(pp.Word(pp.nums)), "123", ["123"])
+
+        self.assertParseAndCheckList(pp.AtStringStart("123"), "123", ["123"])
+
+        with self.assertRaisesParseException():
+            pp.AtStringStart(pp.Word(pp.nums)).parse_string("    123")
+
+        with self.assertRaisesParseException():
+            pp.AtStringStart("123").parse_string("    123")
 
     def testLineAndStringEnd(self):
 
@@ -5592,6 +5738,23 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         success, report = ppc.url.runTests(url_bad_tests, failure_tests=True)
         self.assertTrue(success)
 
+    def testCommonUrlParts(self):
+        from urllib.parse import urlparse
+        sample_url = "https://bob:secret@www.example.com:8080/path/to/resource?filter=int#book-mark"
+
+        parts = urlparse(sample_url)
+        expected = {
+            "scheme": parts.scheme,
+            "auth": "{}:{}".format(parts.username, parts.password),
+            "host": parts.hostname,
+            "port": str(parts.port),
+            "path": parts.path,
+            "query": parts.query,
+            "fragment": parts.fragment,
+        }
+
+        self.assertParseAndCheckDict(ppc.url, sample_url, expected, verbose=True)
+
     def testNumericExpressions(self):
 
         # disable parse actions that do type conversion so we don't accidentally trigger
@@ -5909,6 +6072,35 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         #     print(e)
         #
         # self.assertTrue(success, "bad handling of syntax error")
+
+    def testParseFatalException2(self):
+        # Fatal exception raised in MatchFirst should not be superseded later non-fatal exceptions
+        # addresses Issue #251
+
+        def raise_exception(tokens):
+            raise pp.ParseSyntaxException("should raise here")
+
+        test = pp.MatchFirst(
+            (
+                pp.pyparsing_common.integer + pp.pyparsing_common.identifier
+            ).setParseAction(raise_exception)
+            | pp.pyparsing_common.number
+        )
+
+        with self.assertRaisesParseException(pp.ParseFatalException):
+            test.parseString("1s")
+
+    def testParseFatalException3(self):
+        # Fatal exception raised in MatchFirst should not be superseded later non-fatal exceptions
+        # addresses Issue #251
+
+        test = pp.MatchFirst(
+            (pp.pyparsing_common.integer - pp.pyparsing_common.identifier)
+            | pp.pyparsing_common.integer
+        )
+
+        with self.assertRaisesParseException(pp.ParseFatalException):
+            test.parseString("1")
 
     def testInlineLiteralsUsing(self):
 
@@ -6757,7 +6949,6 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testIndentedBlockClass(self):
         data = """\
-
             A
                 100
                 101
@@ -6780,6 +6971,47 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseAndCheckList(
             group[...], data, [["A", [100, 101, 102]], ["B", [200, 201]], ["C", [300]]]
         )
+
+    def testIndentedBlockClass2(self):
+        datas = [
+            """\
+             A
+                100
+             B
+                200
+             201
+            """,
+            """\
+             A
+                100
+             B
+                200
+               201
+            """,
+            """\
+             A
+                100
+             B
+                200
+                  201
+            """,
+        ]
+        integer = ppc.integer
+        group = pp.Group(
+            pp.Char(pp.alphas) + pp.Group(pp.IndentedBlock(integer, recursive=False))
+        )
+
+        for data in datas:
+            print()
+            print(ppt.with_line_numbers(data))
+
+            print(group[...].parse_string(data).as_list())
+            self.assertParseAndCheckList(
+                group[...] + integer.suppress(),
+                data,
+                [["A", [100]], ["B", [200]]],
+                verbose=False,
+            )
 
     def testIndentedBlockClassWithRecursion(self):
         data = """\
@@ -6806,7 +7038,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         )
 
         print("using searchString")
-        print(sum(group.searchString(data)).dump())
+        print(group.searchString(data))
+        # print(sum(group.searchString(data)).dump())
 
         self.assertParseAndCheckList(
             group[...],
@@ -7179,6 +7412,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ):
                 a = pp.oneOf("A", "B")
 
+    def testAutonameElements(self):
+        with ppt.reset_pyparsing_context():
+            pp.enable_diag(pp.Diagnostics.enable_debug_on_named_expressions)
+
+            a = pp.Literal("a")
+            b = pp.Literal("b").set_name("bbb")
+            z = pp.Literal("z")
+            leading_a = a + pp.FollowedBy(z | a | b)
+
+            grammar = (z | leading_a | b)[...] + "a"
+
+            self.assertFalse(a.debug)
+            self.assertFalse(a.customName)
+            pp.autoname_elements()
+            self.assertTrue(a.debug)
+            self.assertEqual('a', a.name)
+            self.assertEqual('bbb', b.name)
+
     def testEnableDebugOnNamedExpressions(self):
         """
         - enable_debug_on_named_expressions - flag to auto-enable debug on all subsequent
@@ -7213,7 +7464,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 Match integer at loc 5(1,6)
                   1 2 3
                        ^
-                ParseException raised: Expected integer, found end of text  (at char 5), (line:1, col:6)
+                Match integer failed, ParseException raised: Expected integer, found end of text  (at char 5), (line:1, col:6)
                 """
             )
             output = test_stdout.getvalue()
@@ -7253,7 +7504,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match integer at loc 4(1,5)
               123 A100
                   ^
-            ParseException raised: Expected integer, found 'A100'  (at char 4), (line:1, col:5)
+            Match integer failed, ParseException raised: Expected integer, found 'A100'  (at char 4), (line:1, col:5)
             Match W:(0-9A-Za-z) at loc 4(1,5)
               123 A100
                   ^
@@ -7261,11 +7512,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match integer at loc 8(1,9)
               123 A100
                       ^
-            ParseException raised: Expected integer, found end of text  (at char 8), (line:1, col:9)
+            Match integer failed, ParseException raised: Expected integer, found end of text  (at char 8), (line:1, col:9)
             Match W:(0-9A-Za-z) at loc 8(1,9)
               123 A100
                       ^
-            ParseException raised: Expected W:(0-9A-Za-z), found end of text  (at char 8), (line:1, col:9)
+            Match W:(0-9A-Za-z) failed, ParseException raised: Expected W:(0-9A-Za-z), found end of text  (at char 8), (line:1, col:9)
             Matched [{integer | W:(0-9A-Za-z)}]... -> [123, 'A100']
             
             Match integer at loc 0(1,1)
@@ -7275,7 +7526,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match integer at loc 4(1,5)
               123 A100
                   ^
-            ParseException raised: Expected integer, found 'A100'  (at char 4), (line:1, col:5)
+            Match integer failed, ParseException raised: Expected integer, found 'A100'  (at char 4), (line:1, col:5)
             Match W:(0-9A-Za-z) at loc 4(1,5)
               123 A100
                   ^
@@ -7283,11 +7534,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match integer at loc 8(1,9)
               123 A100
                       ^
-            ParseException raised: Expected integer, found end of text  (at char 8), (line:1, col:9)
+            Match integer failed, ParseException raised: Expected integer, found end of text  (at char 8), (line:1, col:9)
             Match W:(0-9A-Za-z) at loc 8(1,9)
               123 A100
                       ^
-            ParseException raised: Expected W:(0-9A-Za-z), found end of text  (at char 8), (line:1, col:9)
+            Match W:(0-9A-Za-z) failed, ParseException raised: Expected W:(0-9A-Za-z), found end of text  (at char 8), (line:1, col:9)
             """
         )
         output = test_stdout.getvalue()
@@ -7300,18 +7551,19 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testEnableDebugWithCachedExpressionsMarkedWithAsterisk(self):
 
+        a = pp.Literal("a").setName("A").setDebug()
+        b = pp.Literal("b").setName("B").setDebug()
+        z = pp.Literal("z").setName("Z").setDebug()
+        leading_a = a + pp.FollowedBy(z | a | b)
+        leading_a.setName("leading_a").setDebug()
+
+        grammar = (z | leading_a | b)[...] + "a"
+
+        # parse test string and capture debug output
         test_stdout = StringIO()
         with resetting(sys, "stdout", "stderr"):
             sys.stdout = test_stdout
             sys.stderr = test_stdout
-
-            a = pp.Literal("a").setName("A").setDebug()
-            b = pp.Literal("b").setName("B").setDebug()
-            z = pp.Literal("z").setName("Z").setDebug()
-            leading_a = a + pp.FollowedBy(z | a | b)
-            leading_a.setName("leading_a").setDebug()
-
-            grammar = (z | leading_a | b)[...] + "a"
             grammar.parseString("aba")
 
         expected_debug_output = dedent(
@@ -7319,7 +7571,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match Z at loc 0(1,1)
               aba
               ^
-            ParseException raised: Expected Z, found 'aba'  (at char 0), (line:1, col:1)
+            Match Z failed, ParseException raised: Expected Z, found 'aba'  (at char 0), (line:1, col:1)
             Match leading_a at loc 0(1,1)
               aba
               ^
@@ -7330,11 +7582,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match Z at loc 1(1,2)
               aba
                ^
-            ParseException raised: Expected Z, found 'ba'  (at char 1), (line:1, col:2)
+            Match Z failed, ParseException raised: Expected Z, found 'ba'  (at char 1), (line:1, col:2)
             Match A at loc 1(1,2)
               aba
                ^
-            ParseException raised: Expected A, found 'ba'  (at char 1), (line:1, col:2)
+            Match A failed, ParseException raised: Expected A, found 'ba'  (at char 1), (line:1, col:2)
             Match B at loc 1(1,2)
               aba
                ^
@@ -7343,15 +7595,15 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             *Match Z at loc 1(1,2)
               aba
                ^
-            *ParseException raised: Expected Z, found 'ba'  (at char 1), (line:1, col:2)
+            *Match Z failed, ParseException raised: Expected Z, found 'ba'  (at char 1), (line:1, col:2)
             Match leading_a at loc 1(1,2)
               aba
                ^
             *Match A at loc 1(1,2)
               aba
                ^
-            *ParseException raised: Expected A, found 'ba'  (at char 1), (line:1, col:2)
-            ParseException raised: Expected A, found 'ba'  (at char 1), (line:1, col:2)
+            *Match A failed, ParseException raised: Expected A, found 'ba'  (at char 1), (line:1, col:2)
+            Match leading_a failed, ParseException raised: Expected A, found 'ba'  (at char 1), (line:1, col:2)
             *Match B at loc 1(1,2)
               aba
                ^
@@ -7359,7 +7611,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match Z at loc 2(1,3)
               aba
                 ^
-            ParseException raised: Expected Z, found 'a'  (at char 2), (line:1, col:3)
+            Match Z failed, ParseException raised: Expected Z, found 'a'  (at char 2), (line:1, col:3)
             Match leading_a at loc 2(1,3)
               aba
                 ^
@@ -7370,20 +7622,20 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             Match Z at loc 3(1,4)
               aba
                  ^
-            ParseException raised: Expected Z, found end of text  (at char 3), (line:1, col:4)
+            Match Z failed, ParseException raised: Expected Z, found end of text  (at char 3), (line:1, col:4)
             Match A at loc 3(1,4)
               aba
                  ^
-            ParseException raised: Expected A, found end of text  (at char 3), (line:1, col:4)
+            Match A failed, ParseException raised: Expected A, found end of text  (at char 3), (line:1, col:4)
             Match B at loc 3(1,4)
               aba
                  ^
-            ParseException raised: Expected B, found end of text  (at char 3), (line:1, col:4)
-            ParseException raised: Expected {Z | A | B}, found end of text  (at char 3), (line:1, col:4)
+            Match B failed, ParseException raised: Expected B, found end of text  (at char 3), (line:1, col:4)
+            Match leading_a failed, ParseException raised: Expected {Z | A | B}, found end of text  (at char 3), (line:1, col:4)
             Match B at loc 2(1,3)
               aba
                 ^
-            ParseException raised: Expected B, found 'a'  (at char 2), (line:1, col:3)
+            Match B failed, ParseException raised: Expected B, found 'a'  (at char 2), (line:1, col:3)
             """
         )
         if pp.ParserElement._packratEnabled:
@@ -7392,6 +7644,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             # remove '*' cache markers from expected output
             expected_debug_output = expected_debug_output.replace("*", "")
             packrat_status = "disabled"
+        print("Packrat status:", packrat_status)
 
         output = test_stdout.getvalue()
         print(output)
@@ -7605,9 +7858,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
             # test escape char as only character in range
             esc_word = pp.Word(esc_char, pp.alphas.upper())
-            expected = r"{}[A-Z]*".format(
-                esc_re_set2_char(esc_char)
-            )
+            expected = r"{}[A-Z]*".format(esc_re_set2_char(esc_char))
             print(
                 "Testing escape char: {} -> {} re: '{}')".format(
                     esc_char, esc_word, esc_word.reString
@@ -7804,7 +8055,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
     def testReturnOfFurthestException(self):
         # test return of furthest exception
         testGrammar = (
-            pp.Literal("A") | (pp.Optional("B") + pp.Literal("C")) | pp.Literal("D")
+            pp.Literal("A") | (pp.Literal("B") + pp.Literal("C")) | pp.Literal("E")
         )
         try:
             testGrammar.parseString("BC")
@@ -7814,6 +8065,9 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             self.assertEqual("BD", pe.pstr, "wrong test string failed to parse")
             self.assertEqual(
                 1, pe.loc, "error in Optional matching, pe.loc=" + str(pe.loc)
+            )
+            self.assertTrue(
+                "found 'D'" in str(pe), "wrong alternative raised exception"
             )
 
     def testValidateCorrectlyDetectsInvalidLeftRecursion(self):
@@ -8238,27 +8492,9 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         try:
             pp.Word(pp.nums).parseString("ABC")
         except pp.ParseException as pe:
-            with self.assertRaises(AttributeError):
-                print(pe.nonexistent_attribute)
-
             expected_str = "Expected W:(0-9), found 'ABC'  (at char 0), (line:1, col:1)"
             self.assertEqual(expected_str, str(pe), "invalid ParseException str")
             self.assertEqual(expected_str, repr(pe), "invalid ParseException repr")
-
-            expected_dir = [
-                "args",
-                "col",
-                "explain",
-                "explain_exception",
-                "line",
-                "lineno",
-                "markInputline",
-                "mark_input_line",
-                "with_traceback",
-            ]
-            observed_dir = [attr for attr in dir(pe) if not attr.startswith("_")]
-            print(observed_dir)
-            self.assertEqual(expected_dir, observed_dir, "invalid dir(ParseException)")
 
             self.assertEqual(
                 ">!<ABC", pe.markInputline(), "invalid default mark input line"
@@ -8321,6 +8557,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         expr = pp.Char(pp.nums)
         print(expr)
         self.assertEqual("(0-9)", repr(expr))
+
+    def testEmptyExpressionsAreHandledProperly(self):
+        from pyparsing.diagram import to_railroad
+        for cls in (pp.And, pp.Or, pp.MatchFirst, pp.Each):
+            print("testing empty", cls.__name__)
+            expr = cls([])
+            expr.streamline()
+            to_railroad(expr)
 
 
 class Test03_EnablePackratParsing(TestCase):

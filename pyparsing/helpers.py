@@ -1,4 +1,6 @@
 # helpers.py
+import html.entities
+
 from .core import *
 from .util import _bslash, _flatten, _escapeRegexRangeChars
 
@@ -8,10 +10,10 @@ from .util import _bslash, _flatten, _escapeRegexRangeChars
 #
 def delimited_list(
     expr: ParserElement,
-    delim: str = ",",
+    delim: Union[str, ParserElement] = ",",
     combine: bool = False,
     *,
-    allow_trailing_delim: bool = False
+    allow_trailing_delim: bool = False,
 ) -> ParserElement:
     """Helper to define a delimited list of expressions - the delimiter
     defaults to ','. By default, the list elements and delimiters can
@@ -54,7 +56,7 @@ def counted_array(
     expr: ParserElement,
     int_expr: OptionalType[ParserElement] = None,
     *,
-    intExpr: OptionalType[ParserElement] = None
+    intExpr: OptionalType[ParserElement] = None,
 ) -> ParserElement:
     """Helper to define a counted list of expressions.
 
@@ -92,11 +94,12 @@ def counted_array(
         # - type: 'bool'
     """
     intExpr = intExpr or int_expr
-    arrayExpr = Forward()
+    array_expr = Forward()
 
-    def countFieldParseAction(s, l, t):
+    def count_field_parse_action(s, l, t):
+        nonlocal array_expr
         n = t[0]
-        arrayExpr << (And([expr] * n) if n else empty)
+        array_expr <<= (expr * n) if n else Empty()
         # clear list contents, but keep any named results
         del t[:]
 
@@ -105,8 +108,8 @@ def counted_array(
     else:
         intExpr = intExpr.copy()
     intExpr.set_name("arrayLen")
-    intExpr.add_parse_action(countFieldParseAction, callDuringTry=True)
-    return (intExpr + arrayExpr).set_name("(len) " + str(expr) + "...")
+    intExpr.add_parse_action(count_field_parse_action, call_during_try=True)
+    return (intExpr + array_expr).set_name("(len) " + str(expr) + "...")
 
 
 def match_previous_literal(expr: ParserElement) -> ParserElement:
@@ -183,7 +186,7 @@ def one_of(
     as_keyword: bool = False,
     *,
     useRegex: bool = True,
-    asKeyword: bool = False
+    asKeyword: bool = False,
 ) -> ParserElement:
     """Helper to quickly define a set of alternative :class:`Literal` s,
     and makes sure to do longest-first testing when there is a conflict,
@@ -192,17 +195,17 @@ def one_of(
 
     Parameters:
 
-     - ``strs`` - a string of space-delimited literals, or a collection of
-       string literals
-     - ``caseless`` - treat all literals as caseless - (default= ``False``)
-     - ``use_regex`` - as an optimization, will
-       generate a :class:`Regex` object; otherwise, will generate
-       a :class:`MatchFirst` object (if ``caseless=True`` or ``asKeyword=True``, or if
-       creating a :class:`Regex` raises an exception) - (default= ``True``)
-     - ``as_keyword`` - enforce :class:`Keyword`-style matching on the
-       generated expressions - (default= ``False``)
-     - ``asKeyword`` and ``useRegex`` are retained for pre-PEP8 compatibility,
-       but will be removed in a future release
+    - ``strs`` - a string of space-delimited literals, or a collection of
+      string literals
+    - ``caseless`` - treat all literals as caseless - (default= ``False``)
+    - ``use_regex`` - as an optimization, will
+      generate a :class:`Regex` object; otherwise, will generate
+      a :class:`MatchFirst` object (if ``caseless=True`` or ``asKeyword=True``, or if
+      creating a :class:`Regex` raises an exception) - (default= ``True``)
+    - ``as_keyword`` - enforce :class:`Keyword`-style matching on the
+      generated expressions - (default= ``False``)
+    - ``asKeyword`` and ``useRegex`` are retained for pre-PEP8 compatibility,
+      but will be removed in a future release
 
     Example::
 
@@ -222,7 +225,7 @@ def one_of(
 
     if isinstance(caseless, str_type):
         warnings.warn(
-            "More than one string argument passed to oneOf, pass"
+            "More than one string argument passed to one_of, pass"
             " choices as a list or space-delimited string",
             stacklevel=2,
         )
@@ -242,7 +245,7 @@ def one_of(
     elif isinstance(strs, Iterable):
         symbols = list(strs)
     else:
-        raise TypeError("Invalid argument to oneOf, expected string or iterable")
+        raise TypeError("Invalid argument to one_of, expected string or iterable")
     if not symbols:
         return NoMatch()
 
@@ -276,7 +279,7 @@ def one_of(
                 )
         except sre_constants.error:
             warnings.warn(
-                "Exception creating Regex for oneOf, building MatchFirst", stacklevel=2
+                "Exception creating Regex for one_of, building MatchFirst", stacklevel=2
             )
 
     # last resort, just use MatchFirst
@@ -392,9 +395,9 @@ def locatedExpr(expr: ParserElement) -> ParserElement:
 
     This helper adds the following results names:
 
-     - ``locn_start`` - location where matched expression begins
-     - ``locn_end`` - location where matched expression ends
-     - ``value`` - the actual parsed results
+    - ``locn_start`` - location where matched expression begins
+    - ``locn_end`` - location where matched expression ends
+    - ``value`` - the actual parsed results
 
     Be careful if the input text contains ``<TAB>`` characters, you
     may want to call :class:`ParserElement.parseWithTabs`
@@ -425,22 +428,22 @@ def nested_expr(
     content: OptionalType[ParserElement] = None,
     ignore_expr: ParserElement = quoted_string(),
     *,
-    ignoreExpr: ParserElement = quoted_string()
+    ignoreExpr: ParserElement = quoted_string(),
 ) -> ParserElement:
     """Helper method for defining nested lists enclosed in opening and
     closing delimiters (``"("`` and ``")"`` are the default).
 
     Parameters:
-     - ``opener`` - opening character for a nested list
-       (default= ``"("``); can also be a pyparsing expression
-     - ``closer`` - closing character for a nested list
-       (default= ``")"``); can also be a pyparsing expression
-     - ``content`` - expression for items within the nested lists
-       (default= ``None``)
-     - ``ignore_expr`` - expression for ignoring opening and closing delimiters
-       (default= :class:`quoted_string`)
-     - ``ignoreExpr`` - this pre-PEP8 argument is retained for compatibility
-       but will be removed in a future release
+    - ``opener`` - opening character for a nested list
+      (default= ``"("``); can also be a pyparsing expression
+    - ``closer`` - closing character for a nested list
+      (default= ``")"``); can also be a pyparsing expression
+    - ``content`` - expression for items within the nested lists
+      (default= ``None``)
+    - ``ignore_expr`` - expression for ignoring opening and closing delimiters
+      (default= :class:`quoted_string`)
+    - ``ignoreExpr`` - this pre-PEP8 argument is retained for compatibility
+      but will be removed in a future release
 
     If an expression is not provided for the content argument, the
     nested expression will capture all whitespace-delimited content
@@ -647,10 +650,9 @@ any_open_tag, any_close_tag = make_html_tags(
     Word(alphas, alphanums + "_:").set_name("any tag")
 )
 
-
-_htmlEntityMap = dict(zip("gt lt amp nbsp quot apos".split(), "><& \"'"))
+_htmlEntityMap = {k.rstrip(";"): v for k, v in html.entities.html5.items()}
 common_html_entity = Regex(
-    "&(?P<entity>" + "|".join(_htmlEntityMap.keys()) + ");"
+    "&(?P<entity>" + "|".join(_htmlEntityMap) + ");"
 ).set_name("common HTML entity")
 
 
@@ -701,31 +703,31 @@ def infix_notation(
     improve your parser performance.
 
     Parameters:
-     - ``base_expr`` - expression representing the most basic operand to
-       be used in the expression
-     - ``op_list`` - list of tuples, one for each operator precedence level
-       in the expression grammar; each tuple is of the form ``(op_expr,
-       num_operands, right_left_assoc, (optional)parse_action)``, where:
+    - ``base_expr`` - expression representing the most basic operand to
+      be used in the expression
+    - ``op_list`` - list of tuples, one for each operator precedence level
+      in the expression grammar; each tuple is of the form ``(op_expr,
+      num_operands, right_left_assoc, (optional)parse_action)``, where:
 
-       - ``op_expr`` is the pyparsing expression for the operator; may also
-         be a string, which will be converted to a Literal; if ``num_operands``
-         is 3, ``op_expr`` is a tuple of two expressions, for the two
-         operators separating the 3 terms
-       - ``num_operands`` is the number of terms for this operator (must be 1,
-         2, or 3)
-       - ``right_left_assoc`` is the indicator whether the operator is right
-         or left associative, using the pyparsing-defined constants
-         ``OpAssoc.RIGHT`` and ``OpAssoc.LEFT``.
-       - ``parse_action`` is the parse action to be associated with
-         expressions matching this operator expression (the parse action
-         tuple member may be omitted); if the parse action is passed
-         a tuple or list of functions, this is equivalent to calling
-         ``set_parse_action(*fn)``
-         (:class:`ParserElement.set_parse_action`)
-     - ``lpar`` - expression for matching left-parentheses
-       (default= ``Suppress('(')``)
-     - ``rpar`` - expression for matching right-parentheses
-       (default= ``Suppress(')')``)
+      - ``op_expr`` is the pyparsing expression for the operator; may also
+        be a string, which will be converted to a Literal; if ``num_operands``
+        is 3, ``op_expr`` is a tuple of two expressions, for the two
+        operators separating the 3 terms
+      - ``num_operands`` is the number of terms for this operator (must be 1,
+        2, or 3)
+      - ``right_left_assoc`` is the indicator whether the operator is right
+        or left associative, using the pyparsing-defined constants
+        ``OpAssoc.RIGHT`` and ``OpAssoc.LEFT``.
+      - ``parse_action`` is the parse action to be associated with
+        expressions matching this operator expression (the parse action
+        tuple member may be omitted); if the parse action is passed
+        a tuple or list of functions, this is equivalent to calling
+        ``set_parse_action(*fn)``
+        (:class:`ParserElement.set_parse_action`)
+    - ``lpar`` - expression for matching left-parentheses
+      (default= ``Suppress('(')``)
+    - ``rpar`` - expression for matching right-parentheses
+      (default= ``Suppress(')')``)
 
     Example::
 
@@ -837,20 +839,20 @@ def infix_notation(
 
 def indentedBlock(blockStatementExpr, indentStack, indent=True, backup_stacks=[]):
     """
-        (DEPRECATED - use IndentedBlock class instead)
+    (DEPRECATED - use IndentedBlock class instead)
     Helper method for defining space-delimited indentation blocks,
     such as those used to define block statements in Python source code.
 
     Parameters:
 
-     - ``blockStatementExpr`` - expression defining syntax of statement that
-       is repeated within the indented block
-     - ``indentStack`` - list created by caller to manage indentation stack
-       (multiple ``statementWithIndentedBlock`` expressions within a single
-       grammar should share a common ``indentStack``)
-     - ``indent`` - boolean indicating whether block must be indented beyond
-       the current level; set to ``False`` for block of left-most statements
-       (default= ``True``)
+    - ``blockStatementExpr`` - expression defining syntax of statement that
+      is repeated within the indented block
+    - ``indentStack`` - list created by caller to manage indentation stack
+      (multiple ``statementWithIndentedBlock`` expressions within a single
+      grammar should share a common ``indentStack``)
+    - ``indent`` - boolean indicating whether block must be indented beyond
+      the current level; set to ``False`` for block of left-most statements
+      (default= ``True``)
 
     A valid block must contain at least one ``blockStatement``.
 
@@ -989,21 +991,26 @@ class IndentedBlock(ParseElementEnhance):
         self._recursive = recursive
 
     def parseImpl(self, instring, loc, doActions=True):
+        # advance parse position to non-whitespace by using an Empty()
+        # this should be the column to be used for all subsequent indented lines
+        anchor_loc = Empty().preParse(instring, loc)
+
         # see if self.expr matches at the current location - if not it will raise an exception
         # and no further work is necessary
-        self.expr.parseImpl(instring, loc, doActions)
+        self.expr.try_parse(instring, anchor_loc, doActions)
 
-        indent_col = col(loc, instring)
+        indent_col = col(anchor_loc, instring)
         peer_parse_action = match_only_at_col(indent_col)
-        peer_expr = FollowedBy(self.expr).add_parse_action(peer_parse_action)
-        inner_expr = Empty() + peer_expr.suppress() + self.expr
+        peer_detect_expr = Empty().add_parse_action(peer_parse_action)
+        inner_expr = Empty() + peer_detect_expr + self.expr
+        inner_expr.set_name(f"inner {hex(id(inner_expr))[-4:].upper()}@{indent_col}")
 
         if self._recursive:
             indent_parse_action = condition_as_parse_action(
                 lambda s, l, t, relative_to_col=indent_col: col(l, s) > relative_to_col
             )
             indent_expr = FollowedBy(self.expr).add_parse_action(indent_parse_action)
-            inner_expr += Opt(indent_expr + self)
+            inner_expr += Opt(Group(indent_expr + self.copy()))
 
         return OneOrMore(inner_expr).parseImpl(instring, loc, doActions)
 

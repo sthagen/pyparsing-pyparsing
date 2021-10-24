@@ -4,7 +4,7 @@ What's New in Pyparsing 3.0.0
 
 :author: Paul McGuire
 
-:date: September, 2021
+:date: October, 2021
 
 :abstract: This document summarizes the changes made
     in the 3.0.0 release of pyparsing.
@@ -44,8 +44,7 @@ synonyms will be removed in a future version of pyparsing.
 Railroad diagramming
 --------------------
 An excellent new enhancement is the new railroad diagram
-generator for documenting pyparsing parsers. You need to install
-`Railroad-Diagram Generator package` https://pypi.org/project/railroad-diagrams/ to test this example::
+generator for documenting pyparsing parsers.::
 
     import pyparsing as pp
 
@@ -61,6 +60,10 @@ generator for documenting pyparsing parsers. You need to install
     # construct railroad track diagram for this parser and
     # save as HTML
     parser.create_diagram('parser_rr_diag.html')
+
+To use this new feature, install the supporting diagramming packages using::
+
+    pip install pyparsing[diagrams]
 
 See more in the examples directory: ``make_diagram.py`` and ``railroad_diagram_demo.py``.
 
@@ -160,6 +163,10 @@ just namespaces, to add some helpful behavior:
 
         pp.enable_all_warnings()
 
+- added support for calling ``enable_all_warnings()`` if warnings are enabled
+  using the Python ``-W`` switch, or setting a non-empty value to the environment
+  variable ``PYPARSINGENABLEALLWARNINGS``.
+
 - added new warning, ``warn_on_match_first_with_lshift_operator`` to
   warn when using ``'<<'`` with a ``'|'`` ``MatchFirst`` operator,
   which will
@@ -190,6 +197,32 @@ just namespaces, to add some helpful behavior:
   mistake when using Forwards)
   (**currently not working on PyPy**)
 
+Support for yielding native Python ``list`` and ``dict`` types in place of ``ParseResults``
+-------------------------------------------------------------------------------
+To support parsers that are intended to generate native Python collection
+types such as lists and dicts, the ``Group`` and `Dict` classes now accept an
+additional boolean keyword argument ``aslist`` and `asdict` respectively. See
+the ``jsonParser.py`` example in the ``pyparsing/examples`` source directory for
+how to return types as ``ParseResults`` and as Python collection types, and the
+distinctions in working with the different types.
+
+In addition parse actions that must return a value of list type (which would
+normally be converted internally to a ``ParseResults``) can override this default
+behavior by returning their list wrapped in the new ``ParseResults.List`` class::
+
+      # this parse action tries to return a list, but pyparsing
+      # will convert to a ParseResults
+      def return_as_list_but_still_get_parse_results(tokens):
+          return tokens.asList()
+
+      # this parse action returns the tokens as a list, and pyparsing will
+      # maintain its list type in the final parsing results
+      def return_as_list(tokens):
+          return ParseResults.List(tokens.asList())
+
+This is the mechanism used internally by the ``Group`` class when defined
+using ``aslist=True``.
+
 New Located class to replace locatedExpr helper method
 ------------------------------------------------------
 The new ``Located`` class will replace the current ``locatedExpr`` method for
@@ -205,7 +238,7 @@ For this code::
         for match in locatedExpr(wd).search_string("ljsdf123lksdjjf123lkkjj1222"):
             print(match)
 
-the docs for ``locaatedExpr`` show this output::
+the docs for ``locatedExpr`` show this output::
 
         [[0, 'ljsdf', 5]]
         [[8, 'lksdjjf', 15]]
@@ -227,6 +260,27 @@ on the whole result.
 
 The existing ``locatedExpr`` is retained for backward-compatibility, but will be
 deprecated in a future release.
+
+New AtLineStart and AtStringStart classes
+-----------------------------------------
+As part fixing some matching behavior in LineStart and StringStart, two new
+classes have been added: AtLineStart and AtStringStart.
+
+The following expressions are equivalent::
+
+    LineStart() + expr      and     AtLineStart(expr)
+    StringStart() + expr    and     AtStringStart(expr)
+
+LineStart and StringStart now will only match if their related expression is
+actually at the start of the string or current line, without skipping whitespace.::
+
+    (LineStart() + Word(alphas)).parseString("ABC")  # passes
+    (LineStart() + Word(alphas)).parseString("  ABC")  # fails
+
+LineStart is also smarter about matching at the beginning of the string.
+
+This was the intended behavior previously, but could be bypassed if wrapped
+in other ParserElements.
 
 New IndentedBlock class to replace indentedBlock helper method
 --------------------------------------------------------------
@@ -275,8 +329,34 @@ Debug logging has been improved by:
   packrat cache (previously cache hits did not show debug logging).
   Values returned from the packrat cache are marked with an '*'.
 
-- Improved fail logging, showing the failed text line and marker where
+- Improved fail logging, showing the failed expression, text line, and marker where
   the failure occurred.
+
+- Adding ``with_line_numbers`` to ``pyparsing_testing``. Use ``with_line_numbers``
+  to visualize the data being parsed, with line and column numbers corresponding
+  to the values output when enabling ``set_debug()`` on an expression::
+
+      data = """\
+         A
+            100"""
+      expr = pp.Word(pp.alphanums).set_name("word").set_debug()
+      print(ppt.with_line_numbers(data))
+      expr[...].parseString(data)
+
+  prints::
+
+      .          1
+        1234567890
+      1:   A
+      2:      100
+      Match word at loc 3(1,4)
+          A
+          ^
+      Matched word -> ['A']
+      Match word at loc 11(2,7)
+             100
+             ^
+      Matched word -> ['100']
 
 New / improved examples
 -----------------------
@@ -301,14 +381,33 @@ New / improved examples
 - A simplified Lua parser has been added to the examples
   (``lua_parser.py``).
 
+- Demonstration of defining a custom Unicode set for cuneiform
+  symbols, as well as simple Cuneiform->Python conversion is included
+  in ``cuneiform_python.py``.
+
 - Fixed bug in ``delta_time.py`` example, when using a quantity
   of seconds/minutes/hours/days > 999.
 
 Other new features
 ------------------
+- ``url`` expression added to ``pyparsing_common``, with named fields for
+  common fields in URLs. See the updated ``urlExtractorNew.py`` file in the
+  ``examples`` directory. Submitted by Wolfgang Fahl.
+
 - ``delimited_list`` now supports an additional flag ``allow_trailing_delim``,
   to optionally parse an additional delimiter at the end of the list.
   Submitted by Kazantcev Andrey.
+
+- Added global method ``autoname_elements()`` to call ``set_name()`` on all locally
+  defined ``ParserElements`` that haven't been explicitly named using ``set_name()``, using
+  their local variable name. Useful for setting names on multiple elements when
+  creating a railroad diagram::
+
+            a = pp.Literal("a")
+            b = pp.Literal("b").set_name("bbb")
+            pp.autoname_elements()
+
+  `a` will get named "a", while `b` will keep its name "bbb".
 
 - Enhanced default strings created for ``Word`` expressions, now showing
   string ranges if possible. ``Word(alphas)`` would formerly
@@ -452,7 +551,15 @@ API Changes
   whitespace characters on all built-in expressions defined
   in the pyparsing module.
 
-- ``camelCase`` names have been converted to PEP-8 ``snake_case`` names:
+- ``camelCase`` names have been converted to PEP-8 ``snake_case`` names.
+
+  Method names and arguments that were camel case (such as ``parseString``)
+  have been replaced with PEP-8 snake case versions (``parse_string``).
+
+  Backward-compatibility synonyms for all names and arguments have
+  been included, to allow parsers written using the old names to run
+  without change. The synonyms will be removed in a future release.
+  New parser code should be written using the new PEP-8 snake case names.
 
         ==============================  ================================
         Name                            Previous name
@@ -495,6 +602,9 @@ API Changes
         - as_dict                       asDict
         - get_name                      getName
 
+        ParseBaseException
+        - parser_element                parserElement
+
         any_open_tag                    anyOpenTag
         any_close_tag                   anyCloseTag
         c_style_comment                 cStyleComment
@@ -536,10 +646,6 @@ API Changes
         with_attribute                  withAttribute
         with_class                      withClass
         ==============================  ================================
-
-  Backward-compatibility synonyms will allow parsers written using the old
-  names to run, allowing developers to convert to the new names. The
-  synonyms will be removed in a future release.
 
 Discontinued Features
 =====================
@@ -585,6 +691,9 @@ Other discontinued features
 Fixed Bugs
 ==========
 
+- Fixed issue when LineStart() expressions would match input text that was not
+  necessarily at the beginning of a line.
+
 - Fixed bug in regex definitions for ``real`` and ``sci_real`` expressions in
   ``pyparsing_common``.
 
@@ -603,11 +712,31 @@ Fixed Bugs
 - Fixed bug in ``Each`` when using ``Regex``, when ``Regex`` expression would
   get parsed twice.
 
+- Fixed bugs in ``Each`` when passed ``OneOrMore`` or ``ZeroOrMore`` expressions:
+  . first expression match could be enclosed in an extra nesting level
+  . out-of-order expressions now handled correctly if mixed with required
+    expressions
+  . results names are maintained correctly for these expression
+
 - Fixed ``FutureWarning`` that sometimes is raised when ``'['`` passed as a
   character to ``Word``.
 
 - Fixed debug logging to show failure location after whitespace skipping.
 
+- Fixed ``ParseFatalExceptions`` failing to override normal exceptions or expression
+  matches in ``MatchFirst`` expressions.
+
+- Fixed bug in which ``ParseResults`` replaces a collection type value with an invalid
+  type annotation (as a result of changed behavior in Python 3.9).
+
+- Fixed bug in ``ParseResults`` when calling ``__getattr__`` for special double-underscored
+  methods. Now raises ``AttributeError`` for non-existent results when accessing a
+  name starting with '__'.
+
+- Fixed bug in ``Located`` class when used with a results name.
+
+- Fixed bug in ``QuotedString`` class when the escaped quote string is not a
+  repeated character.
 
 Acknowledgments
 ===============
