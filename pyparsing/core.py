@@ -176,7 +176,9 @@ def enable_all_warnings():
 del __config_flags
 
 
-def _should_enable_warnings(cmd_line_warn_options: List[str], warn_env_var: str) -> bool:
+def _should_enable_warnings(
+    cmd_line_warn_options: List[str], warn_env_var: str
+) -> bool:
     enable = bool(warn_env_var)
     for warn_opt in cmd_line_warn_options:
         w_action, w_message, w_category, w_module, w_line = (warn_opt + "::::").split(
@@ -191,7 +193,9 @@ def _should_enable_warnings(cmd_line_warn_options: List[str], warn_env_var: str)
     return enable
 
 
-if _should_enable_warnings(sys.warnoptions, os.environ.get("PYPARSINGENABLEALLWARNINGS")):
+if _should_enable_warnings(
+    sys.warnoptions, os.environ.get("PYPARSINGENABLEALLWARNINGS")
+):
     enable_all_warnings()
 
 
@@ -560,7 +564,9 @@ class ParserElement(ABC):
                 self._parse = self._parse._originalParseMethod
         return self
 
-    def set_parse_action(self, *fns: ParseAction, **kwargs) -> OptionalType["ParserElement"]:
+    def set_parse_action(
+        self, *fns: ParseAction, **kwargs
+    ) -> OptionalType["ParserElement"]:
         """
         Define one or more actions to perform when successfully matching parse element definition.
 
@@ -1691,6 +1697,7 @@ class ParserElement(ABC):
             # -> ['ablaj', 'lskjd']
         """
         import typing
+
         if isinstance(other, str_type):
             other = Suppress(other)
 
@@ -2673,6 +2680,7 @@ class Word(Token):
         self.mayIndexError = False
         self.asKeyword = asKeyword
 
+        # see if we can make a regex for this Word
         if " " not in self.initChars | self.bodyChars and (min == 1 and exact == 0):
             if self.bodyChars == self.initChars:
                 if max == 0:
@@ -2680,7 +2688,10 @@ class Word(Token):
                 elif max == 1:
                     repeat = ""
                 else:
-                    repeat = "{{{}}}".format(max)
+                    repeat = "{{{},{}}}".format(
+                        self.minLen,
+                        "" if self.maxLen == _MAX_INT else self.maxLen
+                    )
                 self.reString = "[{}]{}".format(
                     _collapseStringToRanges(self.initChars),
                     repeat,
@@ -3528,8 +3539,8 @@ class ParseExpression(ParserElement):
 
     def __init__(self, exprs: IterableType[ParserElement], savelist: bool = False):
         super().__init__(savelist)
-        self.exprs : List[ParserElement]
-        exprs : Iterable[ParserElement]
+        self.exprs: List[ParserElement]
+        exprs: Iterable[ParserElement]
         if isinstance(exprs, _generatorType):
             exprs = list(exprs)
 

@@ -11,10 +11,12 @@ import contextlib
 import datetime
 import re
 import sys
+import warnings
 from types import SimpleNamespace
 from io import StringIO
 from textwrap import dedent
-from unittest import TestCase
+from typing import Any
+import unittest
 
 import pyparsing as pp
 from examples.jsonParser import jsonObject
@@ -87,6 +89,41 @@ def __():
     return current_method_name(3) + ": "
 
 
+class TestCase(unittest.TestCase):
+    @contextlib.contextmanager
+    def assertRaises(self, expected_exception_type: Any, msg: Any = None):
+        """
+        Simple wrapper to print out the exceptions raised after assertRaises
+        """
+        with super().assertRaises(expected_exception_type, msg=msg) as ar:
+            yield
+
+        if getattr(ar, "exception", None) is not None:
+            print(
+                "Raised expected exception: {}: {}".format(
+                    type(ar.exception).__name__, str(ar.exception)
+                )
+            )
+        else:
+            print(
+                "Expected {} exception not raised".format(
+                    expected_exception_type.__name__
+                )
+            )
+        return ar
+
+    @contextlib.contextmanager
+    def assertDoesNotWarn(self, msg: str = None):
+        if msg is None:
+            msg = "unexpected warning raised"
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("error")
+            try:
+                yield
+            except Exception as e:
+                self.fail("{}: {}".format(msg, e))
+
+
 class Test01_PyparsingTestInit(TestCase):
     def runTest(self):
         from pyparsing import (
@@ -105,6 +142,7 @@ class Test01_PyparsingTestInit(TestCase):
 class Test01a_PyparsingEnvironmentTests(TestCase):
     def runTest(self):
         # test warnings enable detection
+        # fmt: off
         tests = [
             (([], "",), False),
             ((["d", ], "",), True),
@@ -121,6 +159,7 @@ class Test01a_PyparsingEnvironmentTests(TestCase):
             ((["d:::blah", ], "1",), True),
             ((["i", ], "1",), False),
         ]
+        # fmt: on
 
         all_success = True
         for args, expected in tests:
@@ -139,29 +178,6 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def setUp(self):
         self.suite_context.restore()
-
-    @contextlib.contextmanager
-    def assertRaises(self, expected_exception_type, msg=None):
-        """
-        Simple wrapper to print out the exceptions raised after assertRaises
-        """
-        try:
-            with super().assertRaises(expected_exception_type, msg=msg) as ar:
-                yield
-        finally:
-            if getattr(ar, "exception", None) is not None:
-                print(
-                    "Raised expected exception: {}: {}".format(
-                        type(ar.exception).__name__, str(ar.exception)
-                    )
-                )
-            else:
-                print(
-                    "Expected {} exception not raised".format(
-                        expected_exception_type.__name__
-                    )
-                )
-        return ar
 
     def test000_assert_packrat_status(self):
         print("Packrat enabled:", ParserElement._packratEnabled)
@@ -1892,28 +1908,32 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseResultsEquals(testVal, expected_list=expected)
 
     def testHTMLEntities(self):
-        html_source = dedent("""\
-        This &amp; that
-        2 &gt; 1
-        0 &lt; 1
-        Don&apos;t get excited!
-        I said &quot;Don&apos;t get excited!&quot;
-        Copyright &copy; 2021
-        Dot &longrightarrow; &dot;
-        """)
+        html_source = dedent(
+            """\
+            This &amp; that
+            2 &gt; 1
+            0 &lt; 1
+            Don&apos;t get excited!
+            I said &quot;Don&apos;t get excited!&quot;
+            Copyright &copy; 2021
+            Dot &longrightarrow; &dot;
+            """
+        )
         transformer = pp.common_html_entity.add_parse_action(pp.replace_html_entity)
         transformed = transformer.transform_string(html_source)
         print(transformed)
 
-        expected = dedent("""\
-        This & that
-        2 > 1
-        0 < 1
-        Don't get excited!
-        I said "Don't get excited!"
-        Copyright © 2021
-        Dot ⟶ ˙
-        """)
+        expected = dedent(
+            """\
+            This & that
+            2 > 1
+            0 < 1
+            Don't get excited!
+            I said "Don't get excited!"
+            Copyright © 2021
+            Dot ⟶ ˙
+            """
+        )
         self.assertEqual(expected, transformed)
 
     def testInfixNotationBasicArithEval(self):
@@ -2943,6 +2963,13 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseResultsEquals(
             result, compare_list, msg="issue with ParseResults.insert()"
         )
+
+    def testParseResultsAddingSuppressedTokenWithResultsName(self):
+        parser = "aaa" + (pp.NoMatch() | pp.Suppress("-"))("B")
+        try:
+            dd = parser.parse_string("aaa -").as_dict()
+        except RecursionError:
+            self.fail("fail getting named result when empty")
 
     def testIgnoreString(self):
         """test ParserElement.ignore() passed a string arg"""
@@ -4314,6 +4341,44 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             multiCharResult.asList(),
             msg="using different openers and closers shouldn't affect resulting ParseResults",
         )
+
+    def testWordMinMaxArgs(self):
+        parsers = [
+            "A" + pp.Word(pp.nums),
+            "A" + pp.Word(pp.nums, min=1),
+            "A" + pp.Word(pp.nums, max=6),
+            "A" + pp.Word(pp.nums, min=1, max=6),
+            "A" + pp.Word(pp.nums, min=1),
+            "A" + pp.Word(pp.nums, min=2),
+            "A" + pp.Word(pp.nums, min=2, max=6),
+            pp.Word("A", pp.nums),
+            pp.Word("A", pp.nums, min=1),
+            pp.Word("A", pp.nums, max=6),
+            pp.Word("A", pp.nums, min=1, max=6),
+            pp.Word("A", pp.nums, min=1),
+            pp.Word("A", pp.nums, min=2),
+            pp.Word("A", pp.nums, min=2, max=6),
+            pp.Word(pp.alphas, pp.nums),
+            pp.Word(pp.alphas, pp.nums, min=1),
+            pp.Word(pp.alphas, pp.nums, max=6),
+            pp.Word(pp.alphas, pp.nums, min=1, max=6),
+            pp.Word(pp.alphas, pp.nums, min=1),
+            pp.Word(pp.alphas, pp.nums, min=2),
+            pp.Word(pp.alphas, pp.nums, min=2, max=6),
+        ]
+
+        fails = []
+        for p in parsers:
+            print(p, getattr(p, "reString", "..."), end=" ", flush=True)
+            try:
+                p.parseString("A123")
+            except Exception as e:
+                print("      <<< FAIL")
+                fails.append(p)
+            else:
+                print()
+        if fails:
+            self.fail("{} failed to match".format(",".join(str(f) for f in fails)))
 
     def testWordExclude(self):
 
@@ -5740,6 +5805,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testCommonUrlParts(self):
         from urllib.parse import urlparse
+
         sample_url = "https://bob:secret@www.example.com:8080/path/to/resource?filter=int#book-mark"
 
         parts = urlparse(sample_url)
@@ -7402,6 +7468,10 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         - warn_on_multiple_string_args_to_oneof - flag to enable warnings when oneOf is
           incorrectly called with multiple str arguments (default=True)
         """
+        with self.assertDoesNotWarn(
+            "warn_on_multiple_string_args_to_oneof warning raised when not enabled"
+        ):
+            a = pp.oneOf("A", "B")
 
         with ppt.reset_pyparsing_context():
             pp.enable_diag(pp.Diagnostics.warn_on_multiple_string_args_to_oneof)
@@ -7427,8 +7497,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             self.assertFalse(a.customName)
             pp.autoname_elements()
             self.assertTrue(a.debug)
-            self.assertEqual('a', a.name)
-            self.assertEqual('bbb', b.name)
+            self.assertEqual("a", a.name)
+            self.assertEqual("bbb", b.name)
 
     def testEnableDebugOnNamedExpressions(self):
         """
@@ -8286,7 +8356,6 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         )
 
     def testWarnUsingLshiftForward(self):
-        import warnings
 
         print(
             "verify that using '<<' operator with a Forward raises a warning if there is a dangling '|' operator"
@@ -8319,15 +8388,12 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         c = fwd | pp.Word("c")
 
         print("safe << and (|), should not warn")
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("error")
-
+        with self.assertDoesNotWarn(
+            "warning raised on safe use of << with Forward and MatchFirst"
+        ):
             fwd = pp.Forward()
             fwd << (pp.Word("a") | pp.Word("b"))
-            try:
-                c = fwd | pp.Word("c")
-            except Exception as e:
-                self.fail("raised warning when it should not have")
+            c = fwd | pp.Word("c")
 
     def testParseExpressionsWithRegex(self):
         from itertools import product
@@ -8560,6 +8626,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testEmptyExpressionsAreHandledProperly(self):
         from pyparsing.diagram import to_railroad
+
         for cls in (pp.And, pp.Or, pp.MatchFirst, pp.Each):
             print("testing empty", cls.__name__)
             expr = cls([])
