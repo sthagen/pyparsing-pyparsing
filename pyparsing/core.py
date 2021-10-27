@@ -2009,6 +2009,8 @@ class ParserElement(ABC):
 
         (Note that this is a raw string literal, you must include the leading ``'r'``.)
         """
+        from .testing import pyparsing_test
+
         parseAll = parseAll and parse_all
         fullDump = fullDump and full_dump
         printResults = printResults and print_results
@@ -2030,11 +2032,14 @@ class ParserElement(ABC):
         BOM = "\ufeff"
         for t in tests:
             if comment is not None and comment.matches(t, False) or comments and not t:
-                comments.append(t)
+                comments.append(pyparsing_test.with_line_numbers(t))
                 continue
             if not t:
                 continue
-            out = ["\n" + "\n".join(comments) if comments else "", t]
+            out = [
+                "\n" + "\n".join(comments) if comments else "",
+                pyparsing_test.with_line_numbers(t),
+            ]
             comments = []
             try:
                 # convert newline marks to actual newlines, and strip leading BOM if present
@@ -2042,11 +2047,7 @@ class ParserElement(ABC):
                 result = self.parse_string(t, parse_all=parseAll)
             except ParseBaseException as pe:
                 fatal = "(FATAL)" if isinstance(pe, ParseFatalException) else ""
-                if "\n" in t:
-                    out.append(line(pe.loc, t))
-                    out.append(" " * (col(pe.loc, t) - 1) + "^" + fatal)
-                else:
-                    out.append(" " * pe.loc + "^" + fatal)
+                out.append(pe.explain())
                 out.append("FAIL: " + str(pe))
                 success = success and failureTests
                 result = pe
@@ -2689,8 +2690,7 @@ class Word(Token):
                     repeat = ""
                 else:
                     repeat = "{{{},{}}}".format(
-                        self.minLen,
-                        "" if self.maxLen == _MAX_INT else self.maxLen
+                        self.minLen, "" if self.maxLen == _MAX_INT else self.maxLen
                     )
                 self.reString = "[{}]{}".format(
                     _collapseStringToRanges(self.initChars),
@@ -3389,22 +3389,20 @@ class LineStart(_PositionToken):
 
     def __init__(self):
         super().__init__()
+        self.leave_whitespace()
+        self.orig_whiteChars = set() | self.whiteChars
+        self.whiteChars.discard("\n")
+        self.skipper = Empty().set_whitespace_chars(self.whiteChars)
         self.errmsg = "Expected start of line"
-
-    def __add__(self, other):
-        return AtLineStart(other)
-
-    def __sub__(self, other):
-        return AtLineStart(other) - Empty()
 
     def preParse(self, instring, loc):
         if loc == 0:
             return loc
         else:
-            if instring[loc : loc + 1] == "\n" and "\n" in self.whiteChars:
-                ret = loc + 1
-            else:
-                ret = super().preParse(instring, loc)
+            ret = self.skipper.preParse(instring, loc)
+            if "\n" in self.orig_whiteChars:
+                while instring[ret : ret + 1] == "\n":
+                    ret = self.skipper.preParse(instring, ret + 1)
             return ret
 
     def parseImpl(self, instring, loc, doActions=True):
@@ -3444,12 +3442,6 @@ class StringStart(_PositionToken):
     def __init__(self):
         super().__init__()
         self.errmsg = "Expected start of text"
-
-    def __add__(self, other):
-        return AtStringStart(other)
-
-    def __sub__(self, other):
-        return AtStringStart(other) - Empty()
 
     def parseImpl(self, instring, loc, doActions=True):
         if loc != 0:
@@ -3761,6 +3753,24 @@ class And(ParseExpression):
                 self.exprs = [e for e in self.exprs if e is not None]
 
         super().streamline()
+
+        # link any IndentedBlocks to the prior expression
+        for prev, cur in zip(self.exprs, self.exprs[1:]):
+            # traverse cur or any first embedded expr of cur looking for an IndentedBlock
+            # (but watch out for recursive grammar)
+            seen = set()
+            while cur:
+                if id(cur) in seen:
+                    break
+                seen.add(id(cur))
+                if isinstance(cur, IndentedBlock):
+                    prev.add_parse_action(
+                        lambda s, l, t: setattr(cur, "parent_anchor", col(l, s))
+                    )
+                    break
+                subs = cur.recurse()
+                cur = next(iter(subs), None)
+
         self.mayReturnEmpty = all(e.mayReturnEmpty for e in self.exprs)
         return self
 
@@ -3836,6 +3846,7 @@ class Or(ParseExpression):
         super().__init__(exprs, savelist)
         if self.exprs:
             self.mayReturnEmpty = any(e.mayReturnEmpty for e in self.exprs)
+            self.skipWhitespace = all(e.skipWhitespace for e in self.exprs)
         else:
             self.mayReturnEmpty = True
 
@@ -3977,6 +3988,7 @@ class MatchFirst(ParseExpression):
         if self.exprs:
             self.mayReturnEmpty = any(e.mayReturnEmpty for e in self.exprs)
             self.callPreparse = all(e.callPreparse for e in self.exprs)
+            self.skipWhitespace = all(e.skipWhitespace for e in self.exprs)
         else:
             self.mayReturnEmpty = True
 
@@ -4309,6 +4321,68 @@ class ParseElementEnhance(ParserElement):
 
     ignoreWhitespace = ignore_whitespace
     leaveWhitespace = leave_whitespace
+
+
+class IndentedBlock(ParseElementEnhance):
+    """
+    Expression to match one or more expressions at a given indentation level.
+    Useful for parsing text where structure is implied by indentation (like Python source code).
+    """
+
+    class _Indent(Empty):
+        def __init__(self, ref_col: int):
+            super().__init__()
+            self.errmsg = "expected indent at column {}".format(ref_col)
+            self.add_condition(lambda s, l, t: col(l, s) == ref_col)
+
+    class _IndentGreater(Empty):
+        def __init__(self, ref_col: int):
+            super().__init__()
+            self.errmsg = "expected indent at column greater than {}".format(ref_col)
+            self.add_condition(lambda s, l, t: col(l, s) > ref_col)
+
+    def __init__(self, expr: ParserElement, *, recursive: bool = False, grouped: bool = True):
+        super().__init__(expr, savelist=True)
+        # if recursive:
+        #     raise NotImplementedError("IndentedBlock with recursive is not implemented")
+        self._recursive = recursive
+        self._grouped = grouped
+        self.parent_anchor = 1
+
+    def parseImpl(self, instring, loc, doActions=True):
+        # advance parse position to non-whitespace by using an Empty()
+        # this should be the column to be used for all subsequent indented lines
+        anchor_loc = Empty().preParse(instring, loc)
+
+        # see if self.expr matches at the current location - if not it will raise an exception
+        # and no further work is necessary
+        self.expr.try_parse(instring, anchor_loc, doActions)
+
+        indent_col = col(anchor_loc, instring)
+        peer_detect_expr = self._Indent(indent_col)
+
+        inner_expr = Empty() + peer_detect_expr + self.expr
+        if self._recursive:
+            sub_indent = self._IndentGreater(indent_col)
+            nested_block = IndentedBlock(
+                self.expr, recursive=self._recursive, grouped=self._grouped
+            )
+            nested_block.set_debug(self.debug)
+            nested_block.parent_anchor = indent_col
+            inner_expr += Opt(sub_indent + nested_block)
+
+        inner_expr.set_name(f"inner {hex(id(inner_expr))[-4:].upper()}@{indent_col}")
+        block = OneOrMore(inner_expr)
+
+        trailing_undent = self._Indent(self.parent_anchor) | StringEnd()
+
+        if self._grouped:
+            wrapper = Group
+        else:
+            wrapper = lambda expr: expr
+        return (wrapper(block) + Optional(trailing_undent)).parseImpl(
+            instring, anchor_loc, doActions
+        )
 
 
 class AtStringStart(ParseElementEnhance):

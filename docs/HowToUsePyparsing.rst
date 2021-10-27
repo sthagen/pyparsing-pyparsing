@@ -985,7 +985,8 @@ Exception classes and Troubleshooting
                      on Forward expression that has no contained expression
 
   Warnings can also be enabled using the Python ``-W`` switch, or setting a non-empty
-  value to the environment variable ``PYPARSINGENABLEALLWARNINGS``
+  value to the environment variable ``PYPARSINGENABLEALLWARNINGS``. (If using `-Wd` for
+  testing, but wishing to disable pyparsing warnings, add `-Wi:::pyparsing`.)
 
 
 Miscellaneous attributes and methods
@@ -1105,13 +1106,20 @@ Helper methods
   then pass ``None`` for this argument.
 
 
-- ``IndentedBlock(statement_expr, recursive=True)`` -
+- ``IndentedBlock(statement_expr, recursive=False, grouped=True)`` -
   function to define an indented block of statements, similar to
   indentation-based blocking in Python source code:
 
   - ``statement_expr`` - the expression defining a statement that
     will be found in the indented block; a valid ``IndentedBlock``
     must contain at least 1 matching ``statement_expr``
+
+  - ``recursive`` - flag indicating whether the IndentedBlock can
+    itself contain nested sub-blocks of the same type of expression
+    (default=False)
+
+  - ``grouped`` - flag indicating whether the tokens returned from
+    parsing the IndentedBlock should be grouped (default=True)
 
 .. _originalTextFor:
 

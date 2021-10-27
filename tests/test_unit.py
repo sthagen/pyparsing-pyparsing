@@ -1344,6 +1344,10 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             r"[-A]",
             r"[\x21]",
             r"[а-яА-ЯёЁA-Z$_\041α-ω]",
+            r"[\0xc0-\0xd6\0xd8-\0xf6\0xf8-\0xff]",
+            r"[\0xa1-\0xbf\0xd7\0xf7]",
+            r"[\0xc0-\0xd6\0xd8-\0xf6\0xf8-\0xff]",
+            r"[\0xa1-\0xbf\0xd7\0xf7]",
         )
         expectedResults = (
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -1367,6 +1371,10 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             "-A",
             "!",
             "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯёЁABCDEFGHIJKLMNOPQRSTUVWXYZ$_!αβγδεζηθικλμνξοπρςστυφχψω",
+            "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ",
+            "¡¢£¤¥¦§¨©ª«¬\xad®¯°±²³´µ¶·¸¹º»¼½¾¿×÷",
+            pp.alphas8bit,
+            pp.punc8bit,
         )
         for test in zip(testCases, expectedResults):
             t, exp = test
@@ -3587,14 +3595,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         """
 
         test = dedent(test)
-        print(test)
+        print(pp.testing.with_line_numbers(test))
 
         print("normal parsing")
         for t, s, e in (pp.LineStart() + "AAA").scanString(test):
-            print(s, e, pp.lineno(s, test), pp.line(s, test), repr(test[s]))
+            print(s, e, pp.lineno(s, test), pp.line(s, test), repr(t))
             print()
             self.assertEqual(
-                "A", test[s], "failed LineStart with insignificant newlines"
+                "A", t[0][0], "failed LineStart with insignificant newlines"
             )
 
         print(r"parsing without \n in whitespace chars")
@@ -3604,10 +3612,10 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 print(s, e, pp.lineno(s, test), pp.line(s, test), repr(test[s]))
                 print()
                 self.assertEqual(
-                    "A", test[s], "failed LineStart with insignificant newlines"
+                    "A", t[0][0], "failed LineStart with insignificant newlines"
                 )
 
-    def testLineStart3(self):
+    def testLineStartWithLeadingSpaces(self):
         # testing issue #272
         instring = dedent(
             """
@@ -3634,16 +3642,27 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             alpha_line | pp.Word("_"),
             alpha_line | alpha_line,
             pp.MatchFirst([alpha_line, alpha_line]),
+            alpha_line ^ pp.Word("_"),
+            alpha_line ^ alpha_line,
+            pp.Or([alpha_line, pp.Word("_")]),
             pp.LineStart() + pp.Word(pp.alphas) + pp.LineEnd().suppress(),
             pp.And([pp.LineStart(), pp.Word(pp.alphas), pp.LineEnd().suppress()]),
         ]
+        fails = []
         for test in tests:
             print(test.searchString(instring))
-            self.assertEqual(
-                ["a", "d", "e"], flatten(sum(test.search_string(instring)).as_list())
+            if ["a", "b", "c", "d", "e", "f", "g"] != flatten(
+                sum(test.search_string(instring)).as_list()
+            ):
+                fails.append(test)
+        if fails:
+            self.fail(
+                "failed LineStart tests:\n{}".format(
+                    "\n".join(str(expr) for expr in fails)
+                )
             )
 
-    def testLineStart4(self):
+    def testAtLineStart(self):
         test = dedent(
             """\
         AAA this line
@@ -3663,6 +3682,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         )
 
     def testStringStart(self):
+        self.assertParseAndCheckList(
+            pp.StringStart() + pp.Word(pp.nums), "123", ["123"]
+        )
+        self.assertParseAndCheckList(
+            pp.StringStart() + pp.Word(pp.nums), "   123", ["123"]
+        )
+        self.assertParseAndCheckList(pp.StringStart() + "123", "123", ["123"])
+        self.assertParseAndCheckList(pp.StringStart() + "123", "   123", ["123"])
         self.assertParseAndCheckList(pp.AtStringStart(pp.Word(pp.nums)), "123", ["123"])
 
         self.assertParseAndCheckList(pp.AtStringStart("123"), "123", ["123"])
@@ -3672,6 +3699,42 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         with self.assertRaisesParseException():
             pp.AtStringStart("123").parse_string("    123")
+
+    def testStringStartAndLineStartInsideAnd(self):
+        # fmt: off
+        P_MTARG = (
+                pp.StringStart()
+                + pp.Word("abcde")
+                + pp.StringEnd()
+        )
+
+        P_MTARG2 = (
+                pp.LineStart()
+                + pp.Word("abcde")
+                + pp.StringEnd()
+        )
+
+        P_MTARG3 = (
+                pp.AtLineStart(pp.Word("abcde"))
+                + pp.StringEnd()
+        )
+        # fmt: on
+
+        def test(expr, string):
+            expr.streamline()
+            print(expr, repr(string), end=" ")
+            print(expr.parse_string(string))
+
+        test(P_MTARG, "aaa")
+        test(P_MTARG2, "aaa")
+        test(P_MTARG2, "\naaa")
+        test(P_MTARG2, "   aaa")
+        test(P_MTARG2, "\n   aaa")
+
+        with self.assertRaisesParseException():
+            test(P_MTARG3, "   aaa")
+        with self.assertRaisesParseException():
+            test(P_MTARG3, "\n   aaa")
 
     def testLineAndStringEnd(self):
 
@@ -3887,31 +3950,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         U = pp.Literal("U").setParseAction(parseActionHolder.pa0)
         V = pp.Literal("V")
 
+        # fmt: off
         gg = pp.OneOrMore(
-            A
-            | B
-            | C
-            | D
-            | E
-            | F
-            | G
-            | H
-            | I
-            | J
-            | K
-            | L
-            | M
-            | N
-            | O
-            | P
-            | Q
-            | R
-            | S
-            | U
-            | V
-            | B
-            | T
+            A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | U | V | B | T
         )
+        # fmt: on
         testString = "VUTSRQPONMLKJIHGFEDCBA"
         res = gg.parseString(testString)
         print(res)
@@ -3927,30 +3970,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         D = pp.Literal("D").setParseAction(ClassAsPA3)
         E = pp.Literal("E").setParseAction(ClassAsPAStarNew)
 
+        # fmt: off
         gg = pp.OneOrMore(
-            A
-            | B
-            | C
-            | D
-            | E
-            | F
-            | G
-            | H
-            | I
-            | J
-            | K
-            | L
-            | M
-            | N
-            | O
-            | P
-            | Q
-            | R
-            | S
-            | T
-            | U
-            | V
+            A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V
         )
+        # fmt: on
         testString = "VUTSRQPONMLKJIHGFEDCBA"
         res = gg.parseString(testString)
         print(list(map(str, res)))
@@ -7030,7 +7054,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         """
 
         integer = ppc.integer
-        group = pp.Group(pp.Char(pp.alphas) + pp.Group(pp.IndentedBlock(integer)))
+        group = pp.Group(pp.Char(pp.alphas) + pp.IndentedBlock(integer))
 
         group[...].parseString(data).pprint()
 
@@ -7064,7 +7088,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         ]
         integer = ppc.integer
         group = pp.Group(
-            pp.Char(pp.alphas) + pp.Group(pp.IndentedBlock(integer, recursive=False))
+            pp.Char(pp.alphas) + pp.IndentedBlock(integer, recursive=False)
         )
 
         for data in datas:
@@ -7099,9 +7123,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         integer = ppc.integer
         group = pp.Forward()
-        group <<= pp.Group(
-            pp.Char(pp.alphas) + pp.Group(pp.IndentedBlock(integer | group))
-        )
+        group <<= pp.Group(pp.Char(pp.alphas) + pp.IndentedBlock(integer | group))
 
         print("using searchString")
         print(group.searchString(data))
@@ -7116,27 +7138,47 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         print("using parseString")
         print(group[...].parseString(data).dump())
 
-        print("test bad indentation")
         dotted_int = pp.delimited_list(
             pp.Word(pp.nums), ".", allow_trailing_delim=True, combine=True
         )
-        indented_expr = pp.IndentedBlock(dotted_int, recursive=True)
+        indented_expr = pp.IndentedBlock(dotted_int, recursive=True, grouped=True)
+        # indented_expr = pp.Forward()
+        # indented_expr <<= pp.IndentedBlock(dotted_int + indented_expr))
         good_data = """\
             1.
                 1.1
                     1.1.1
+                    1.1.2
             2."""
-        bad_data = """\
+        bad_data1 = """\
             1.
                 1.1
                     1.1.1
                  1.2
             2."""
-        indented_expr.parseString(good_data, parseAll=True)
+        bad_data2 = """\
+            1.
+                1.1
+                    1.1.1
+               1.2
+            2."""
+        print("test good indentation")
+        print(pp.pyparsing_test.with_line_numbers(good_data))
+        print(indented_expr.parseString(good_data, parseAll=True).as_list())
+        print()
+
+        print("test bad indentation")
+        print(pp.pyparsing_test.with_line_numbers(bad_data1))
         with self.assertRaisesParseException(
-            msg="Failed to raise exception with bad indentation"
+            msg="Failed to raise exception with bad indentation 1"
         ):
-            indented_expr.parseString(bad_data, parseAll=True)
+            indented_expr.parseString(bad_data1, parseAll=True)
+
+        print(pp.pyparsing_test.with_line_numbers(bad_data2))
+        with self.assertRaisesParseException(
+            msg="Failed to raise exception with bad indentation 2"
+        ):
+            indented_expr.parseString(bad_data2, parseAll=True)
 
     def testInvalidDiagSetting(self):
         with self.assertRaises(

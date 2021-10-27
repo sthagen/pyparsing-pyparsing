@@ -1,5 +1,6 @@
 # helpers.py
 import html.entities
+import re
 
 from . import __diag__
 from .core import *
@@ -253,9 +254,9 @@ def one_of(
     if not symbols:
         return NoMatch()
 
-    if not asKeyword:
-        # if not producing keywords, need to reorder to take care to avoid masking
-        # longer choices with shorter ones
+    # reorder given symbols to take care to avoid masking longer choices with shorter ones
+    # (but only if the given symbols are not just single characters)
+    if any(len(sym) > 1 for sym in symbols):
         i = 0
         while i < len(symbols) - 1:
             cur = symbols[i]
@@ -270,17 +271,32 @@ def one_of(
             else:
                 i += 1
 
-    if not (caseless or asKeyword) and useRegex:
-        # ~ print(strs, "->", "|".join([_escapeRegexChars(sym) for sym in symbols]))
+    if useRegex:
+        re_flags: int = re.IGNORECASE if caseless else 0
+
         try:
-            if len(symbols) == len("".join(symbols)):
-                return Regex(
-                    "[%s]" % "".join(_escapeRegexRangeChars(sym) for sym in symbols)
-                ).set_name(" | ".join(symbols))
-            else:
-                return Regex("|".join(re.escape(sym) for sym in symbols)).set_name(
-                    " | ".join(symbols)
+            if all(len(sym) == 1 for sym in symbols):
+                # symbols are just single characters, create range regex pattern
+                patt = "[{}]".format(
+                    "".join(_escapeRegexRangeChars(sym) for sym in symbols)
                 )
+            else:
+                patt = "|".join(re.escape(sym) for sym in symbols)
+
+            # wrap with \b word break markers if defining as keywords
+            if asKeyword:
+                patt = r"\b(:?{})\b".format(patt)
+
+            ret = Regex(patt, flags=re_flags).set_name(" | ".join(symbols))
+
+            if caseless:
+                # add parse action to return symbols as specified, not in random
+                # casing as found in input string
+                symbol_map = {sym.lower(): sym for sym in symbols}
+                ret.add_parse_action(lambda s, l, t: symbol_map[t[0].lower()])
+
+            return ret
+
         except sre_constants.error:
             warnings.warn(
                 "Exception creating Regex for one_of, building MatchFirst", stacklevel=2
@@ -982,41 +998,6 @@ def indentedBlock(blockStatementExpr, indentStack, indent=True, backup_stacks=[]
     smExpr.set_fail_action(lambda a, b, c, d: reset_stack())
     blockStatementExpr.ignore(_bslash + LineEnd())
     return smExpr.set_name("indented block")
-
-
-class IndentedBlock(ParseElementEnhance):
-    """
-    Expression to match one or more expressions at a given indentation level.
-    Useful for parsing text where structure is implied by indentation (like Python source code).
-    """
-
-    def __init__(self, expr: ParserElement, recursive: bool = True):
-        super().__init__(expr, savelist=True)
-        self._recursive = recursive
-
-    def parseImpl(self, instring, loc, doActions=True):
-        # advance parse position to non-whitespace by using an Empty()
-        # this should be the column to be used for all subsequent indented lines
-        anchor_loc = Empty().preParse(instring, loc)
-
-        # see if self.expr matches at the current location - if not it will raise an exception
-        # and no further work is necessary
-        self.expr.try_parse(instring, anchor_loc, doActions)
-
-        indent_col = col(anchor_loc, instring)
-        peer_parse_action = match_only_at_col(indent_col)
-        peer_detect_expr = Empty().add_parse_action(peer_parse_action)
-        inner_expr = Empty() + peer_detect_expr + self.expr
-        inner_expr.set_name(f"inner {hex(id(inner_expr))[-4:].upper()}@{indent_col}")
-
-        if self._recursive:
-            indent_parse_action = condition_as_parse_action(
-                lambda s, l, t, relative_to_col=indent_col: col(l, s) > relative_to_col
-            )
-            indent_expr = FollowedBy(self.expr).add_parse_action(indent_parse_action)
-            inner_expr += Opt(Group(indent_expr + self.copy()))
-
-        return OneOrMore(inner_expr).parseImpl(instring, loc, doActions)
 
 
 # it's easy to get these comment structures wrong - they're very common, so may as well make them available
