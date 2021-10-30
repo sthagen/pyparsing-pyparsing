@@ -3326,14 +3326,14 @@ class White(Token):
         return loc, instring[start:loc]
 
 
-class _PositionToken(Token):
+class PositionToken(Token):
     def __init__(self):
         super().__init__()
         self.mayReturnEmpty = True
         self.mayIndexError = False
 
 
-class GoToColumn(_PositionToken):
+class GoToColumn(PositionToken):
     """Token to advance to a specific column of input text; useful for
     tabular report scraping.
     """
@@ -3364,7 +3364,7 @@ class GoToColumn(_PositionToken):
         return newloc, ret
 
 
-class LineStart(_PositionToken):
+class LineStart(PositionToken):
     r"""Matches if current position is at the beginning of a line within
     the parse string
 
@@ -3411,7 +3411,7 @@ class LineStart(_PositionToken):
         raise ParseException(instring, loc, self.errmsg, self)
 
 
-class LineEnd(_PositionToken):
+class LineEnd(PositionToken):
     """Matches if current position is at the end of a line within the
     parse string
     """
@@ -3434,7 +3434,7 @@ class LineEnd(_PositionToken):
             raise ParseException(instring, loc, self.errmsg, self)
 
 
-class StringStart(_PositionToken):
+class StringStart(PositionToken):
     """Matches if current position is at the beginning of the parse
     string
     """
@@ -3451,7 +3451,7 @@ class StringStart(_PositionToken):
         return loc, []
 
 
-class StringEnd(_PositionToken):
+class StringEnd(PositionToken):
     """
     Matches if current position is at the end of the parse string
     """
@@ -3471,7 +3471,7 @@ class StringEnd(_PositionToken):
             raise ParseException(instring, loc, self.errmsg, self)
 
 
-class WordStart(_PositionToken):
+class WordStart(PositionToken):
     """Matches if the current position is at the beginning of a
     :class:`Word`, and is not preceded by any character in a given
     set of ``word_chars`` (default= ``printables``). To emulate the
@@ -3497,7 +3497,7 @@ class WordStart(_PositionToken):
         return loc, []
 
 
-class WordEnd(_PositionToken):
+class WordEnd(PositionToken):
     """Matches if the current position is at the end of a :class:`Word`,
     and is not followed by any character in a given set of ``word_chars``
     (default= ``printables``). To emulate the ``\b`` behavior of
@@ -4014,7 +4014,9 @@ class MatchFirst(ParseExpression):
         for e in self.exprs:
             try:
                 return e._parse(
-                    instring, loc, doActions,
+                    instring,
+                    loc,
+                    doActions,
                 )
             except ParseFatalException as pfe:
                 pfe.__traceback__ = None
@@ -4342,7 +4344,9 @@ class IndentedBlock(ParseElementEnhance):
             self.errmsg = "expected indent at column greater than {}".format(ref_col)
             self.add_condition(lambda s, l, t: col(l, s) > ref_col)
 
-    def __init__(self, expr: ParserElement, *, recursive: bool = False, grouped: bool = True):
+    def __init__(
+        self, expr: ParserElement, *, recursive: bool = False, grouped: bool = True
+    ):
         super().__init__(expr, savelist=True)
         # if recursive:
         #     raise NotImplementedError("IndentedBlock with recursive is not implemented")
@@ -4523,7 +4527,7 @@ class PrecededBy(ParseElementEnhance):
         elif isinstance(expr, (Word, CharsNotIn)) and expr.maxLen != _MAX_INT:
             retreat = expr.maxLen
             self.exact = True
-        elif isinstance(expr, _PositionToken):
+        elif isinstance(expr, PositionToken):
             retreat = 0
             self.exact = True
         self.retreat = retreat
@@ -5409,7 +5413,10 @@ class Dict(TokenConverter):
                 else:
                     tokenlist[ikey] = _ParseResultsWithOffset(dictvalue[0], i)
 
-        return tokenlist if not self._asPythonDict else tokenlist.as_dict()
+        if self._asPythonDict:
+            return [tokenlist.as_dict()] if self.resultsName else tokenlist.as_dict()
+        else:
+            return [tokenlist] if self.resultsName else tokenlist
 
 
 class Suppress(TokenConverter):

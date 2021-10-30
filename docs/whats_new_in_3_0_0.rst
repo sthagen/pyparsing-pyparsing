@@ -8,7 +8,7 @@ What's New in Pyparsing 3.0.0
 
 :abstract: This document summarizes the changes made
     in the 3.0.0 release of pyparsing.
-    (Updated to reflect changes up to 3.0.2)
+    (Updated to reflect changes up to 3.0.4)
 
 .. sectnum::    :depth: 4
 
@@ -498,6 +498,25 @@ Other new features
 API Changes
 ===========
 
+- [Note added in pyparsing 3.0.4]
+  The `ParseResults` class now uses `__slots__` to pre-define instance attributes. This
+  means that code written like this (which was allowed in pyparsing 2.4.7)::
+
+    result = Word(alphas).parseString("abc")
+    result.xyz = 100
+
+  now raises this Python exception::
+
+    AttributeError: 'ParseResults' object has no attribute 'xyz'
+
+  To add new attribute values to ParseResults object in 3.0.0 and later, you must
+  assign them using indexed notation::
+
+    result["xyz"] = 100
+
+  You will still be able to access this new value as an attribute or as an
+  indexed item.
+
 - ``enable_diag()`` and ``disable_diag()`` methods to
   enable specific diagnostic values (instead of setting them
   to ``True`` or ``False``). ``enable_all_warnings()`` has
@@ -532,7 +551,7 @@ API Changes
 - Debug actions now take an added keyword argument ``cache_hit``.
   Now that debug actions are called for expressions matched in the
   packrat parsing cache, debug actions are now called with this extra
-  flag, set to True. For custom debug actions, it is necessary to add
+  flag, set to ``True``. For custom debug actions, it is necessary to add
   support for this new argument.
 
 - ``ZeroOrMore`` expressions that have results names will now
@@ -689,8 +708,9 @@ Other discontinued features
 Fixed Bugs
 ==========
 
-- [Reverted in 3.0.2]Fixed issue when ``LineStart``() expressions would match input text that was not
+- [Reverted in 3.0.2]Fixed issue when ``LineStart()`` expressions would match input text that was not
   necessarily at the beginning of a line.
+
   [The previous behavior was the correct behavior, since it represents the ``LineStart`` as its own
   matching expression. ``ParserElements`` that must start in column 1 can be wrapped in the new
   ``AtLineStart`` class.]
@@ -715,8 +735,7 @@ Fixed Bugs
 
 - Fixed bugs in ``Each`` when passed ``OneOrMore`` or ``ZeroOrMore`` expressions:
   . first expression match could be enclosed in an extra nesting level
-  . out-of-order expressions now handled correctly if mixed with required
-    expressions
+  . out-of-order expressions now handled correctly if mixed with required expressions
   . results names are maintained correctly for these expression
 
 - Fixed ``FutureWarning`` that sometimes is raised when ``'['`` passed as a
