@@ -7529,6 +7529,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
           name is defined on a containing expression with ungrouped subexpressions that also
           have results names (default=True)
         """
+        with self.assertDoesNotWarn(
+            msg="raised {} warning when not enabled".format(
+                pp.Diagnostics.warn_ungrouped_named_tokens_in_collection
+            )
+        ):
+            COMMA = pp.Suppress(",").setName("comma")
+            coord = ppc.integer("x") + COMMA + ppc.integer("y")
+            path = coord[...].setResultsName("path")
 
         with ppt.reset_pyparsing_context():
             pp.enable_diag(pp.Diagnostics.warn_ungrouped_named_tokens_in_collection)
@@ -7544,11 +7552,34 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ):
                 path = coord[...].setResultsName("path")
 
+    def testDontWarnUngroupedNamedTokensIfUngroupedNamesStartWithNOWARN(self):
+        """
+        - warn_ungrouped_named_tokens_in_collection - flag to enable warnings when a results
+          name is defined on a containing expression with ungrouped subexpressions that also
+          have results names (default=True)
+        """
+        with ppt.reset_pyparsing_context():
+            pp.enable_diag(pp.Diagnostics.warn_ungrouped_named_tokens_in_collection)
+
+            with self.assertDoesNotWarn(
+                msg="raised {} warning inner names start with '_NOWARN'".format(
+                    pp.Diagnostics.warn_ungrouped_named_tokens_in_collection
+                )
+            ):
+                pp.originalTextFor(pp.Word("ABC")[...])("words")
+
     def testWarnNameSetOnEmptyForward(self):
         """
         - warn_name_set_on_empty_Forward - flag to enable warnings when a Forward is defined
           with a results name, but has no contents defined (default=False)
         """
+
+        with self.assertDoesNotWarn(
+            msg="raised {} warning when not enabled".format(
+                pp.Diagnostics.warn_name_set_on_empty_Forward
+            )
+        ):
+            base = pp.Forward()("z")
 
         with ppt.reset_pyparsing_context():
             pp.enable_diag(pp.Diagnostics.warn_name_set_on_empty_Forward)
@@ -7566,6 +7597,17 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         - warn_on_parse_using_empty_Forward - flag to enable warnings when a Forward
           has no contents defined (default=False)
         """
+
+        with self.assertDoesNotWarn(
+            msg="raised {} warning when not enabled".format(
+                pp.Diagnostics.warn_on_parse_using_empty_Forward
+            )
+        ):
+            base = pp.Forward()
+            try:
+                print(base.parseString("x"))
+            except ParseException as pe:
+                pass
 
         with ppt.reset_pyparsing_context():
             pp.enable_diag(pp.Diagnostics.warn_on_parse_using_empty_Forward)
@@ -7590,12 +7632,19 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             print("warn_on_assignment_to_Forward not supported on PyPy")
             return
 
+        def a_method():
+            base = pp.Forward()
+            base = pp.Word(pp.alphas)[...] | "(" + base + ")"
+
+        with self.assertDoesNotWarn(
+            msg="raised {} warning when not enabled".format(
+                pp.Diagnostics.warn_on_assignment_to_Forward
+            )
+        ):
+            a_method()
+
         with ppt.reset_pyparsing_context():
             pp.enable_diag(pp.Diagnostics.warn_on_assignment_to_Forward)
-
-            def a_method():
-                base = pp.Forward()
-                base = pp.Word(pp.alphas)[...] | "(" + base + ")"
 
             with self.assertWarns(
                 UserWarning,
@@ -7609,7 +7658,9 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
           incorrectly called with multiple str arguments (default=True)
         """
         with self.assertDoesNotWarn(
-            "warn_on_multiple_string_args_to_oneof warning raised when not enabled"
+            msg="raised {} warning when not enabled".format(
+                pp.Diagnostics.warn_on_multiple_string_args_to_oneof
+            )
         ):
             a = pp.oneOf("A", "B")
 
@@ -7639,6 +7690,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             self.assertTrue(a.debug)
             self.assertEqual("a", a.name)
             self.assertEqual("bbb", b.name)
+
+    def testDelimitedListName(self):
+        bool_constant = pp.Literal("True") | "true" | "False" | "false"
+        bool_list = pp.delimitedList(bool_constant)
+        print(bool_list)
+        self.assertEqual(
+            "{'True' | 'true' | 'False' | 'false'} [, {'True' | 'true' | 'False' | 'false'}]...",
+            str(bool_list),
+        )
+
+        bool_constant.setName("bool")
+        print(bool_constant)
+        print(bool_constant.streamline())
+        bool_list2 = pp.delimitedList(bool_constant)
+        print(bool_constant)
+        print(bool_constant.streamline())
+        print(bool_list2)
+        self.assertEqual("bool [, bool]...", str(bool_list2))
 
     def testEnableDebugOnNamedExpressions(self):
         """
@@ -8240,6 +8309,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertTrue(
             len(results) > 0, "MatchFirst error - not iterating over all choices"
         )
+
+    def testStreamlineOfExpressionsAfterSetName(self):
+        bool_constant = pp.Literal("True") | "true" | "False" | "false"
+        self.assertEqual(
+            "{'True' | 'true' | 'False' | 'false'}", str(bool_constant.streamline())
+        )
+        bool_constant.setName("bool")
+        self.assertEqual("bool", str(bool_constant.streamline()))
 
     def testStreamlineOfSubexpressions(self):
         # verify streamline of subexpressions
