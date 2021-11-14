@@ -2,6 +2,17 @@
 Change Log
 ==========
 
+Version 3.0.6 -
+---------------
+- Added `suppress_warning()` method to individually suppress a warning on a
+  specific ParserElement. Used to refactor `original_text_for` to preserve
+  internal results names, which, while undocumented, had been adopted by
+  some projects.
+
+- Fix bug when `delimited_list` was called with a str literal instead of a
+  parse expression.
+
+
 Version 3.0.5 -
 ---------------
 - Added return type annotations for `col`, `line`, and `lineno`.

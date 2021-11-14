@@ -113,30 +113,30 @@ class TestCase(unittest.TestCase):
         return ar
 
     @contextlib.contextmanager
-    def assertDoesNotWarn(self, msg: str = None):
-        if msg is None:
-            msg = "unexpected warning raised"
+    def assertDoesNotWarn(self, warning_type: type = UserWarning, msg: str = None):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("error")
             try:
                 yield
             except Exception as e:
-                self.fail("{}: {}".format(msg, e))
+                if msg is None:
+                    msg = "unexpected warning {} raised".format(e)
+                if isinstance(e, warning_type):
+                    self.fail("{}: {}".format(msg, e))
+                else:
+                    raise
 
 
 class Test01_PyparsingTestInit(TestCase):
     def runTest(self):
-        from pyparsing import (
-            __version__ as pyparsing_version,
-            __version_time__ as pyparsing_version_time,
-        )
-
         print(
             "Beginning test of pyparsing, version",
-            pyparsing_version,
-            pyparsing_version_time,
+            pp.__version__,
+            pp.__version_time__,
         )
         print("Python version", sys.version)
+        print("__version_info__     :", pp.__version_info__)
+        print("__version_info__ repr:", repr(pp.__version_info__))
 
 
 class Test01a_PyparsingEnvironmentTests(TestCase):
@@ -170,6 +170,23 @@ class Test01a_PyparsingEnvironmentTests(TestCase):
             if actual != expected:
                 all_success = False
         self.assertTrue(all_success, "failed warnings enable test")
+
+
+class Test01b_PyparsingUnitTestUtilitiesTests(TestCase):
+    def runTest(self):
+        with ppt.reset_pyparsing_context():
+            pp.enable_diag(pp.Diagnostics.warn_on_parse_using_empty_Forward)
+
+            # test assertDoesNotWarn raises an AssertionError
+            with self.assertRaises(AssertionError):
+                with self.assertDoesNotWarn(
+                    msg="warned when parsing with an empty Forward expression warning was suppressed",
+                ):
+                    base = pp.Forward()
+                    try:
+                        print(base.parseString("x"))
+                    except ParseException as pe:
+                        pass
 
 
 class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
@@ -221,6 +238,77 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             out_string,
             msg="failure in transformString",
         )
+
+    def testTransformStringWithLeadingWhitespace(self):
+        sample = "\n\ncheck"
+        sample = "    check"
+        keywords = pp.oneOf("aaa bbb", asKeyword=True)
+        ident = ~keywords + pp.Word(pp.alphas)
+        ident = pp.Combine(~keywords + pp.Word(pp.alphas))
+        # ident.add_parse_action(lambda t: t[0].upper())
+        ident.add_parse_action(ppc.upcaseTokens)
+        transformed = ident.transformString(sample)
+
+        print(ppt.with_line_numbers(sample))
+        print(ppt.with_line_numbers(transformed))
+        self.assertEqual(sample.replace("check", "CHECK"), transformed)
+
+    def testTransformStringWithLeadingNotAny(self):
+        sample = "print a100"
+        keywords = set("print read".split())
+        ident = pp.Word(pp.alphas, pp.alphanums).add_condition(
+            lambda t: t[0] not in keywords
+        )
+        print(ident.searchString(sample))
+
+    def testTransformStringWithExpectedLeadingWhitespace(self):
+        sample1 = "\n\ncheck aaa"
+        sample2 = "    check aaa"
+        keywords = pp.oneOf("aaa bbb", asKeyword=True)
+        # This construct only works with parse_string, not with scan_string or its siblings
+        # ident = ~keywords + pp.Word(pp.alphas)
+        ident = pp.Word(pp.alphas)
+        ident.add_parse_action(ppc.upcaseTokens)
+
+        for sample in sample1, sample2:
+            transformed = (keywords | ident).transformString(sample)
+            print(ppt.with_line_numbers(sample))
+            print(ppt.with_line_numbers(transformed))
+            self.assertEqual(sample.replace("check", "CHECK"), transformed)
+            print()
+
+    def testTransformStringWithLeadingWhitespaceFromTranslateProject(self):
+        from pyparsing import Keyword, Word, alphas, alphanums, Combine
+
+        block_start = (Keyword("{") | Keyword("BEGIN")).set_name("block_start")
+        block_end = (Keyword("}") | Keyword("END")).set_name("block_end")
+        reserved_words = block_start | block_end
+
+        # this is the first critical part of this test, an And with a leading NotAny
+        # This construct only works with parse_string, not with scan_string or its siblings
+        # name_id = ~reserved_words + Word(alphas, alphanums + "_").set_name("name_id")
+        name_id = Word(alphas, alphanums + "_").set_name("name_id")
+
+        dialog = name_id("block_id") + (Keyword("DIALOGEX") | Keyword("DIALOG"))(
+            "block_type"
+        )
+        string_table = Keyword("STRINGTABLE")("block_type")
+
+        test_string = (
+            """\r\nSTRINGTABLE\r\nBEGIN\r\n// Comment\r\nIDS_1 "Copied"\r\nEND\r\n"""
+        )
+        print("Original:")
+        print(repr(test_string))
+        print("Should match:")
+        # this is the second critical part of this test, an Or or MatchFirst including dialog
+        for parser in (dialog ^ string_table, dialog | string_table):
+            result = (reserved_words | parser).transformString(test_string)
+            print(repr(result))
+            self.assertEqual(
+                test_string,
+                result,
+                "Failed whitespace skipping with NotAny and MatchFirst/Or",
+            )
 
     def testUpdateDefaultWhitespace(self):
         prev_default_whitespace_chars = pp.ParserElement.DEFAULT_WHITE_CHARS
@@ -3008,6 +3096,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             for r in result:
                 print(r)
                 print(r.get("_info_"))
+            self.assertEqual([0, 15], [r["_info_"][1] for r in result])
 
     def testParseResultsFromDict(self):
         """test helper classmethod ParseResults.from_dict()"""
@@ -7320,6 +7409,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ):
                 expr = (expr_a | expr_b)("rexp")
 
+            with self.assertDoesNotWarn(
+                UserWarning, msg="warned when And within alternation warning was suppressed"
+            ):
+                expr = (expr_a | expr_b).suppress_warning(pp.Diagnostics.warn_multiple_tokens_in_named_alternation)("rexp")
+
             success, report = expr.runTests(
                 """
                 not the bird
@@ -7380,6 +7474,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 UserWarning, msg="failed to warn of And within alternation"
             ):
                 expr = (expr_a ^ expr_b)("rexp")
+
+            with self.assertDoesNotWarn(
+                UserWarning, msg="warned when And within alternation warning was suppressed"
+            ):
+                expr = (expr_a ^ expr_b).suppress_warning(pp.Diagnostics.warn_multiple_tokens_in_named_alternation)("rexp")
 
             expr.runTests(
                 """\
@@ -7552,17 +7651,19 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ):
                 path = coord[...].setResultsName("path")
 
-    def testDontWarnUngroupedNamedTokensIfUngroupedNamesStartWithNOWARN(self):
-        """
-        - warn_ungrouped_named_tokens_in_collection - flag to enable warnings when a results
-          name is defined on a containing expression with ungrouped subexpressions that also
-          have results names (default=True)
-        """
+            with self.assertDoesNotWarn(
+                UserWarning,
+                msg="warned when named repetition of"
+                " ungrouped named expressions warning was suppressed",
+            ):
+                path = coord[...].suppress_warning(pp.Diagnostics.warn_ungrouped_named_tokens_in_collection).setResultsName("path")
+
+    def testDontWarnUngroupedNamedTokensIfWarningSuppressed(self):
         with ppt.reset_pyparsing_context():
             pp.enable_diag(pp.Diagnostics.warn_ungrouped_named_tokens_in_collection)
 
             with self.assertDoesNotWarn(
-                msg="raised {} warning inner names start with '_NOWARN'".format(
+                msg="raised {} warning when warn on ungrouped named tokens was suppressed (original_text_for)".format(
                     pp.Diagnostics.warn_ungrouped_named_tokens_in_collection
                 )
             ):
@@ -7592,6 +7693,12 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ):
                 base("x")
 
+            with self.assertDoesNotWarn(
+                UserWarning,
+                msg="warned when naming an empty Forward expression warning was suppressed",
+            ):
+                base.suppress_warning(pp.Diagnostics.warn_name_set_on_empty_Forward)("x")
+
     def testWarnParsingEmptyForward(self):
         """
         - warn_on_parse_using_empty_Forward - flag to enable warnings when a Forward
@@ -7616,8 +7723,18 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
             with self.assertWarns(
                 UserWarning,
-                msg="failed to warn when naming an empty Forward expression",
+                msg="failed to warn when parsing using an empty Forward expression",
             ):
+                try:
+                    print(base.parseString("x"))
+                except ParseException as pe:
+                    pass
+
+            with self.assertDoesNotWarn(
+                    UserWarning,
+                    msg="warned when parsing using an empty Forward expression warning was suppressed",
+            ):
+                base.suppress_warning(pp.Diagnostics.warn_on_parse_using_empty_Forward)
                 try:
                     print(base.parseString("x"))
                 except ParseException as pe:
@@ -7651,6 +7768,17 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 msg="failed to warn when using '=' to assign expression to a Forward",
             ):
                 a_method()
+
+            def a_method():
+                base = pp.Forward().suppress_warning(pp.Diagnostics.warn_on_assignment_to_Forward)
+                base = pp.Word(pp.alphas)[...] | "(" + base + ")"
+
+            with self.assertDoesNotWarn(
+                UserWarning,
+                msg="warned when using '=' to assign expression to a Forward warning was suppressed",
+            ):
+                a_method()
+
 
     def testWarnOnMultipleStringArgsToOneOf(self):
         """
@@ -7708,6 +7836,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         print(bool_constant.streamline())
         print(bool_list2)
         self.assertEqual("bool [, bool]...", str(bool_list2))
+
+    def testDelimitedListOfStrLiterals(self):
+        expr = pp.delimitedList("ABC")
+        print(str(expr))
+        source = "ABC, ABC,ABC"
+        self.assertParseAndCheckList(
+            expr, source, [s.strip() for s in source.split(",")]
+        )
 
     def testEnableDebugOnNamedExpressions(self):
         """
