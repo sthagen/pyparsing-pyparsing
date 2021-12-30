@@ -3163,6 +3163,16 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         except RecursionError:
             self.fail("fail getting named result when empty")
 
+    def testParseResultsBool(self):
+        result = pp.Word(pp.alphas)[...].parseString("AAA")
+        self.assertTrue(result, "non-empty ParseResults evaluated as False")
+
+        result = pp.Word(pp.alphas)[...].parseString("")
+        self.assertFalse(result, "empty ParseResults evaluated as True")
+
+        result["A"] = 0
+        self.assertTrue(result, "ParseResults with empty list but containing a results name evaluated as False")
+
     def testIgnoreString(self):
         """test ParserElement.ignore() passed a string arg"""
 
@@ -4902,6 +4912,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                     expected, results
                 ),
             )
+
+    def testWordBoundaryExpressions2(self):
+        from itertools import product
+        ws1 = pp.WordStart(pp.alphas)
+        ws2 = pp.WordStart(wordChars=pp.alphas)
+        ws3 = pp.WordStart(word_chars=pp.alphas)
+        we1 = pp.WordEnd(pp.alphas)
+        we2 = pp.WordEnd(wordChars=pp.alphas)
+        we3 = pp.WordEnd(word_chars=pp.alphas)
+
+        for i, (ws, we) in enumerate(product((ws1, ws2, ws3), (we1, we2, we3))):
+            try:
+                expr = ("(" + ws + pp.Word(pp.alphas) + we + ")")
+                expr.parseString("(abc)")
+            except pp.ParseException as pe:
+                self.fail(f"Test {i} failed: {pe}")
+            else:
+                pass
 
     def testRequiredEach(self):
 
@@ -6711,6 +6739,43 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             "noop parse action changed ParseResults structure",
         )
 
+    def testParseActionWithDelimitedList(self):
+        class AnnotatedToken(object):
+            def __init__(self, kind, elements):
+                self.kind = kind
+                self.elements = elements
+
+            def __str__(self):
+                return 'AnnotatedToken(%r, %r)' % (self.kind, self.elements)
+
+            def __eq__(self, other):
+                return type(self) == type(other) and self.kind == other.kind and self.elements == other.elements
+
+            __repr__ = __str__
+
+        def annotate(name):
+            def _(t):
+                return AnnotatedToken(name, t.asList())
+            return _
+
+        identifier = pp.Word(pp.srange('[a-z0-9]'))
+        numeral = pp.Word(pp.nums)
+
+        named_number_value = pp.Suppress('(') + numeral + pp.Suppress(')')
+        named_number = identifier + named_number_value
+
+        named_number_list = (pp.Suppress('{') +
+                             pp.Group(pp.Optional(pp.delimitedList(named_number))) +
+                             pp.Suppress('}'))
+
+        # repro but in #345 - delimitedList silently changes contents of named_number
+        named_number_value.setParseAction(annotate("val"))
+
+        test_string = "{ x1(1), x2(2) }"
+        expected = [['x1', AnnotatedToken("val", ['1']), 'x2', AnnotatedToken("val", ['2'])]]
+
+        self.assertParseAndCheckList(named_number_list, test_string, expected)
+
     def testParseResultsNameBelowUngroupedName(self):
 
         rule_num = pp.Regex("[0-9]+")("LIT_NUM*")
@@ -7845,6 +7910,25 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             expr, source, [s.strip() for s in source.split(",")]
         )
 
+    def testDelimitedListMinMax(self):
+        source = "ABC, ABC,ABC"
+        with self.assertRaises(ValueError, msg="min must be greater than 0"):
+            pp.delimited_list("ABC", min=0)
+        with self.assertRaises(ValueError, msg="max must be greater than, or equal to min"):
+            pp.delimited_list("ABC", min=1, max=0)
+        with self.assertRaises(pp.ParseException):
+            pp.delimited_list("ABC", min=4).parse_string(source)
+
+        source_expr_pairs = [
+            ("ABC,  ABC", pp.delimited_list("ABC", max=2)),
+            (source, pp.delimited_list("ABC", min=2, max=4)),
+        ]
+        for source, expr in source_expr_pairs:
+            print(str(expr))
+            self.assertParseAndCheckList(
+                expr, source, [s.strip() for s in source.split(",")]
+            )
+
     def testEnableDebugOnNamedExpressions(self):
         """
         - enable_debug_on_named_expressions - flag to auto-enable debug on all subsequent
@@ -8148,27 +8232,38 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 "__diag__.{} not set to True".format(diag_name),
             )
 
-    def testWordInternalReRangesKnownSets(self):
-        self.assertEqual(
-            "[!-~]+",
-            pp.Word(pp.printables).reString,
-            "failed to generate correct internal re",
+    def testWordInternalReRangeWithConsecutiveChars(self):
+        self.assertParseAndCheckList(
+            pp.Word("ABCDEMNXYZ"),
+            "ABCDEMNXYZABCDEMNXYZABCDEMNXYZ",
+            ["ABCDEMNXYZABCDEMNXYZABCDEMNXYZ"]
         )
-        self.assertEqual(
-            "[0-9A-Za-z]+",
-            pp.Word(pp.alphanums).reString,
-            "failed to generate correct internal re",
-        )
-        self.assertEqual(
-            "[!-~¡-ÿ]+",
-            pp.Word(pp.pyparsing_unicode.Latin1.printables).reString,
-            "failed to generate correct internal re",
-        )
-        self.assertEqual(
-            "[À-ÖØ-öø-ÿ]+",
-            pp.Word(pp.alphas8bit).reString,
-            "failed to generate correct internal re",
-        )
+
+    def testWordInternalReRangesKnownSet(self):
+        tests = [
+            ("ABCDEMNXYZ", "[A-EMNX-Z]+"),
+            (pp.printables, "[!-~]+"),
+            (pp.alphanums, "[0-9A-Za-z]+"),
+            (pp.pyparsing_unicode.Latin1.printables, "[!-~¡-ÿ]+"),
+            (pp.pyparsing_unicode.Latin1.alphanums, "[0-9A-Za-zª²³µ¹ºÀ-ÖØ-öø-ÿ]+"),
+            (pp.alphas8bit, "[À-ÖØ-öø-ÿ]+"),
+        ]
+        failed = []
+        for word_string, expected_re in tests:
+            try:
+                msg = "failed to generate correct internal re for {!r}".format(word_string)
+                resultant_re = pp.Word(word_string).reString
+                self.assertEqual(
+                    expected_re,
+                    resultant_re,
+                    msg + "; expected {!r} got {!r}".format(expected_re, resultant_re)
+                )
+            except AssertionError:
+                failed.append(msg)
+
+        if failed:
+            print("Errors:\n{}".format("\n".join(failed)))
+            self.fail("failed to generate correct internal re's")
 
     def testWordInternalReRanges(self):
         import random
