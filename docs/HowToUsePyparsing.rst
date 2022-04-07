@@ -8,7 +8,7 @@ Using the pyparsing module
 :revision: 3.0.0
 :date: October, 2021
 
-:copyright: Copyright |copy| 2003-2021 Paul McGuire.
+:copyright: Copyright |copy| 2003-2022 Paul McGuire.
 
 .. |copy| unicode:: 0xA9
 
@@ -396,6 +396,19 @@ methods for code to use are:
 
   If ``fn`` modifies the ``toks`` list in-place, it does not need to return
   and pyparsing will use the modified ``toks`` list.
+  
+  If ``set_parse_action`` is called with an argument of ``None``, then this clears all parse actions
+  attached to that expression.
+  
+  A nice short-cut for calling ``set_parse_action`` is to use it as a decorator::
+  
+    identifier = Word(alphas, alphanums+"_")
+    
+    @identifier.set_parse_action
+    def resolve_identifier(results: ParseResults):
+        return variable_values.get(results[0])
+  
+  (Posted by @MisterMiyagi in this SO answer: https://stackoverflow.com/a/63031959/165216)
 
 - ``add_parse_action`` - similar to ``set_parse_action``, but instead of replacing any
   previously defined parse actions, will append the given action or actions to the
@@ -1065,6 +1078,42 @@ Helper methods
       as the generated pyparsing expression.  You can then use
       this expression to parse input strings, or incorporate it
       into a larger, more complex grammar.
+
+  ``infix_notation`` also supports optional arguments ``lpar`` and ``rpar``, to
+  parse groups with symbols other than "(" and ")". They may be passed as strings
+  (in which case they will be converted to ``Suppress`` objects, and suppressed from
+  the parsed results), or passed as pyparsing expressions, in which case they will
+  be kept as-is, and grouped with their contents.
+
+  For instance, to use "<" and ">" for grouping symbols, you could write::
+
+        expr = infix_notation(int_expr,
+            [
+                (one_of("+ -"), 2, opAssoc.LEFT),
+            ],
+            lpar="<",
+            rpar=">"
+            )
+        expr.parse_string("3 - <2 + 11>")
+
+  returning::
+
+        [3, '-', [2, '+', 11]]
+
+  If the grouping symbols are to be retained, then pass them as pyparsing ``Literals``::
+
+        expr = infix_notation(int_expr,
+            [
+                (one_of("+ -"), 2, opAssoc.LEFT),
+            ],
+            lpar=Literal("<"),
+            rpar=Literal(">")
+            )
+        expr.parse_string("3 - <2 + 11>")
+
+  returning::
+
+        [3, '-', ['<', [2, '+', 11], '>']]
 
 - ``match_previous_literal`` and ``match_previous_expr`` - function to define an
   expression that matches the same content

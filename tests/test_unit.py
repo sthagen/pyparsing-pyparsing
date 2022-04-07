@@ -221,15 +221,19 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         # test case reproducing Issue #350
         from pyparsing import White, alphas, Word
 
-        parser = White(' \t').set_results_name('indent') + Word(alphas).set_results_name('word')
-        result = parser.parse_string('    test')
+        parser = White(" \t").set_results_name("indent") + Word(
+            alphas
+        ).set_results_name("word")
+        result = parser.parse_string("    test")
         print(result.dump())
-        self.assertParseResultsEquals(result, ['    ', 'test'], {'indent': '    ', 'word': 'test'})
+        self.assertParseResultsEquals(
+            result, ["    ", "test"], {"indent": "    ", "word": "test"}
+        )
 
-        parser = White(' \t') + Word(alphas).set_results_name('word')
-        result = parser.parse_string('    test')
+        parser = White(" \t") + Word(alphas).set_results_name("word")
+        result = parser.parse_string("    test")
         print(result.dump())
-        self.assertParseResultsEquals(result, ['    ', 'test'], {'word': 'test'})
+        self.assertParseResultsEquals(result, ["    ", "test"], {"word": "test"})
 
     def testTransformString(self):
         make_int_with_commas = ppc.integer().addParseAction(
@@ -461,8 +465,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         test("3.1415926535*3.1415926535 / 10", 3.1415926535 * 3.1415926535 / 10)
         test("PI * PI / 10", math.pi * math.pi / 10)
         test("PI*PI/10", math.pi * math.pi / 10)
-        test("PI^2", math.pi ** 2)
-        test("round(PI^2)", round(math.pi ** 2))
+        test("PI^2", math.pi**2)
+        test("round(PI^2)", round(math.pi**2))
         test("6.02E23 * 8.048", 6.02e23 * 8.048)
         test("e / 3", math.e / 3)
         test("sin(PI/2)", math.sin(math.pi / 2))
@@ -471,20 +475,20 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         test("trunc(-E)", int(-math.e))
         test("round(E)", round(math.e))
         test("round(-E)", round(-math.e))
-        test("E^PI", math.e ** math.pi)
+        test("E^PI", math.e**math.pi)
         test("exp(0)", 1)
         test("exp(1)", math.e)
-        test("2^3^2", 2 ** 3 ** 2)
-        test("(2^3)^2", (2 ** 3) ** 2)
-        test("2^3+2", 2 ** 3 + 2)
-        test("2^3+5", 2 ** 3 + 5)
-        test("2^9", 2 ** 9)
+        test("2^3^2", 2**3**2)
+        test("(2^3)^2", (2**3) ** 2)
+        test("2^3+2", 2**3 + 2)
+        test("2^3+5", 2**3 + 5)
+        test("2^9", 2**9)
         test("sgn(-2)", -1)
         test("sgn(0)", 0)
         test("sgn(0.1)", 1)
         test("foo(0.1)", None)
         test("round(E, 3)", round(math.e, 3))
-        test("round(PI^2, 3)", round(math.pi ** 2, 3))
+        test("round(PI^2, 3)", round(math.pi**2, 3))
         test("sgn(cos(PI/4))", 1)
         test("sgn(cos(PI/2))", 0)
         test("sgn(cos(PI*3/4))", -1)
@@ -1811,24 +1815,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         qs = pp.QuotedString(quote_char=".[", end_quote_char="].")
         print(qs.reString)
-        self.assertParseAndCheckList(qs, ".[...].", ['...'])
-        self.assertParseAndCheckList(qs, ".[].", [''])
-        self.assertParseAndCheckList(qs, ".[]].", [']'])
-        self.assertParseAndCheckList(qs, ".[]]].", [']]'])
+        self.assertParseAndCheckList(qs, ".[...].", ["..."])
+        self.assertParseAndCheckList(qs, ".[].", [""])
+        self.assertParseAndCheckList(qs, ".[]].", ["]"])
+        self.assertParseAndCheckList(qs, ".[]]].", ["]]"])
 
         qs = pp.QuotedString(quote_char="+*", end_quote_char="*+")
         print(qs.reString)
-        self.assertParseAndCheckList(qs, "+*...*+", ['...'])
-        self.assertParseAndCheckList(qs, "+**+", [''])
-        self.assertParseAndCheckList(qs, "+***+", ['*'])
-        self.assertParseAndCheckList(qs, "+****+", ['**'])
+        self.assertParseAndCheckList(qs, "+*...*+", ["..."])
+        self.assertParseAndCheckList(qs, "+**+", [""])
+        self.assertParseAndCheckList(qs, "+***+", ["*"])
+        self.assertParseAndCheckList(qs, "+****+", ["**"])
 
         qs = pp.QuotedString(quote_char="*/", end_quote_char="/*")
         print(qs.reString)
-        self.assertParseAndCheckList(qs, "*/.../*", ['...'])
-        self.assertParseAndCheckList(qs, "*//*", [''])
-        self.assertParseAndCheckList(qs, "*///*", ['/'])
-        self.assertParseAndCheckList(qs, "*////*", ['//'])
+        self.assertParseAndCheckList(qs, "*/.../*", ["..."])
+        self.assertParseAndCheckList(qs, "*//*", [""])
+        self.assertParseAndCheckList(qs, "*///*", ["/"])
+        self.assertParseAndCheckList(qs, "*////*", ["//"])
 
     def testRepeater(self):
         if ParserElement._packratEnabled or ParserElement._left_recursion_enabled:
@@ -2082,6 +2086,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         plusop = pp.oneOf("+ -")
         factop = pp.Literal("!")
 
+        # fmt: off
         expr = pp.infixNotation(
             operand,
             [
@@ -2092,6 +2097,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 (plusop, 2, pp.opAssoc.LEFT),
             ],
         )
+        # fmt: on
 
         test = [
             "9 + 2 + 3",
@@ -2177,6 +2183,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 return not v
 
         boolOperand = pp.Word(pp.alphas, max=1, asKeyword=True) | pp.oneOf("True False")
+        # fmt: off
         boolExpr = pp.infixNotation(
             boolOperand,
             [
@@ -2185,6 +2192,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 ("or", 2, pp.opAssoc.LEFT, BoolOr),
             ],
         )
+        # fmt: on
         test = [
             "p and not q",
             "not not p",
@@ -2232,6 +2240,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         plusop = pp.oneOf("+ -")
         factop = pp.Literal("!")
 
+        # fmt: off
         expr = pp.infixNotation(
             operand,
             [
@@ -2242,6 +2251,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 (plusop, 2, pp.opAssoc.LEFT),
             ],
         )
+        # fmt: on
 
         test = ["9"]
         for t in test:
@@ -2313,7 +2323,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 return ret
 
         class ExpOp(BinOp):
-            opn_map = {"**": lambda a, b: b ** a}
+            opn_map = {"**": lambda a, b: b**a}
 
         class MultOp(BinOp):
             import operator
@@ -2326,6 +2336,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             opn_map = {"+": operator.add, "-": operator.sub}
 
         operand = ppc.number().setParseAction(NumberNode)
+        # fmt: off
         expr = pp.infixNotation(
             operand,
             [
@@ -2335,6 +2346,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 (plusop, 2, pp.opAssoc.LEFT, AddOp),
             ],
         )
+        # fmt: on
 
         tests = """\
             2+7
@@ -2362,48 +2374,144 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
     def testInfixNotationExceptions(self):
         num = pp.Word(pp.nums)
 
+        # fmt: off
+
         # arity 3 with None opExpr - should raise ValueError
         with self.assertRaises(ValueError):
-            expr = pp.infixNotation(num, [(None, 3, pp.opAssoc.LEFT)])
+            expr = pp.infixNotation(
+                num,
+                [
+                    (None, 3, pp.opAssoc.LEFT),
+                ]
+            )
 
         # arity 3 with invalid tuple - should raise ValueError
         with self.assertRaises(ValueError):
-            expr = pp.infixNotation(num, [(("+", "-", "*"), 3, pp.opAssoc.LEFT)])
+            expr = pp.infixNotation(
+                num,
+                [
+                    (("+", "-", "*"), 3, pp.opAssoc.LEFT),
+                ]
+            )
 
         # left arity > 3 - should raise ValueError
         with self.assertRaises(ValueError):
-            expr = pp.infixNotation(num, [("*", 4, pp.opAssoc.LEFT)])
+            expr = pp.infixNotation(
+                num,
+                [
+                    ("*", 4, pp.opAssoc.LEFT),
+                ]
+            )
 
         # right arity > 3 - should raise ValueError
         with self.assertRaises(ValueError):
-            expr = pp.infixNotation(num, [("*", 4, pp.opAssoc.RIGHT)])
+            expr = pp.infixNotation(
+                num,
+                [
+                    ("*", 4, pp.opAssoc.RIGHT),
+                ]
+            )
 
         # assoc not from opAssoc - should raise ValueError
         with self.assertRaises(ValueError):
-            expr = pp.infixNotation(num, [("*", 2, "LEFT")])
+            expr = pp.infixNotation(
+                num,
+                [
+                    ("*", 2, "LEFT"),
+                ]
+            )
+        # fmt: on
 
     def testInfixNotationWithNonOperators(self):
         # left arity 2 with None expr
         # right arity 2 with None expr
         num = pp.Word(pp.nums).addParseAction(pp.tokenMap(int))
         ident = ppc.identifier()
+
+        # fmt: off
         for assoc in (pp.opAssoc.LEFT, pp.opAssoc.RIGHT):
             expr = pp.infixNotation(
-                num | ident, [(None, 2, assoc), ("+", 2, pp.opAssoc.LEFT)]
+                num | ident,
+                [
+                    (None, 2, assoc),
+                    ("+", 2, pp.opAssoc.LEFT),
+                ]
             )
             self.assertParseAndCheckList(expr, "3x+2", [[[3, "x"], "+", 2]])
+        # fmt: on
 
     def testInfixNotationTernaryOperator(self):
         # left arity 3
         # right arity 3
         num = pp.Word(pp.nums).addParseAction(pp.tokenMap(int))
+
+        # fmt: off
         for assoc in (pp.opAssoc.LEFT, pp.opAssoc.RIGHT):
             expr = pp.infixNotation(
-                num, [("+", 2, pp.opAssoc.LEFT), (("?", ":"), 3, assoc)]
+                num,
+                [
+                    ("+", 2, pp.opAssoc.LEFT),
+                    (("?", ":"), 3, assoc),
+                ]
             )
             self.assertParseAndCheckList(
                 expr, "3 + 2? 12: 13", [[[3, "+", 2], "?", 12, ":", 13]]
             )
+        # fmt: on
+
+    def testInfixNotationWithAlternateParenSymbols(self):
+        num = pp.Word(pp.nums).addParseAction(pp.tokenMap(int))
+
+        # fmt: off
+        expr = pp.infixNotation(
+            num,
+            [
+                ("+", 2, pp.opAssoc.LEFT),
+            ],
+            lpar="(",
+            rpar=")",
+        )
+        self.assertParseAndCheckList(
+            expr, "3 + (2 + 11)", [[3, '+', [2, '+', 11]]]
+        )
+
+        expr = pp.infixNotation(
+            num,
+            [
+                ("+", 2, pp.opAssoc.LEFT),
+            ],
+            lpar="<",
+            rpar=">",
+        )
+        self.assertParseAndCheckList(
+            expr, "3 + <2 + 11>", [[3, '+', [2, '+', 11]]]
+        )
+
+        expr = pp.infixNotation(
+            num,
+            [
+                ("+", 2, pp.opAssoc.LEFT),
+            ],
+            lpar=pp.Literal("<"),
+            rpar=pp.Literal(">"),
+        )
+        self.assertParseAndCheckList(
+            expr, "3 + <2 + 11>", [[3, '+', ['<', [2, '+', 11], '>']]]
+        )
+
+        expr = pp.infixNotation(
+            num,
+            [
+                ("+", 2, pp.opAssoc.LEFT),
+            ],
+            lpar=pp.Literal("<<"),
+            rpar=pp.Literal(">>"),
+        )
+        self.assertParseAndCheckList(
+            expr, "3 + <<2 + 11>>", [[3, '+', ['<<', [2, '+', 11], '>>']]]
+        )
+
+        # fmt: on
 
     def testParseResultsPickle(self):
         import pickle
@@ -3208,7 +3316,10 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertFalse(result, "empty ParseResults evaluated as True")
 
         result["A"] = 0
-        self.assertTrue(result, "ParseResults with empty list but containing a results name evaluated as False")
+        self.assertTrue(
+            result,
+            "ParseResults with empty list but containing a results name evaluated as False",
+        )
 
     def testIgnoreString(self):
         """test ParserElement.ignore() passed a string arg"""
@@ -3486,8 +3597,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         try:
             print("lets try an invalid RE")
-            invRe = pp.Regex("(\"[^\"]*\")|('[^']*'")
-        except Exception as e:
+            invRe = pp.Regex("(\"[^\"]*\")|('[^']*'").re
+        except ValueError as e:
             print("successfully rejected an invalid RE:", end=" ")
             print(e)
         else:
@@ -3496,7 +3607,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         with self.assertRaises(
             ValueError, msg="failed to warn empty string passed to Regex"
         ):
-            invRe = pp.Regex("")
+            pp.Regex("").re
 
     def testRegexAsType(self):
 
@@ -4952,6 +5063,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
     def testWordBoundaryExpressions2(self):
         from itertools import product
+
         ws1 = pp.WordStart(pp.alphas)
         ws2 = pp.WordStart(wordChars=pp.alphas)
         ws3 = pp.WordStart(word_chars=pp.alphas)
@@ -4961,7 +5073,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         for i, (ws, we) in enumerate(product((ws1, ws2, ws3), (we1, we2, we3))):
             try:
-                expr = ("(" + ws + pp.Word(pp.alphas) + we + ")")
+                expr = "(" + ws + pp.Word(pp.alphas) + we + ")"
                 expr.parseString("(abc)")
             except pp.ParseException as pe:
                 self.fail(f"Test {i} failed: {pe}")
@@ -5452,6 +5564,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         a = pp.oneOf("a b c")
         b = pp.oneOf("d e f")
+        # fmt: off
         arith_expr = pp.infixNotation(
             pp.Word(pp.nums),
             [
@@ -5460,8 +5573,12 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ],
         )
         arith_expr2 = pp.infixNotation(
-            pp.Word(pp.nums), [(("?", ":"), 3, pp.opAssoc.LEFT)]
+            pp.Word(pp.nums),
+            [
+                (("?", ":"), 3, pp.opAssoc.LEFT),
+            ]
         )
+        # fmt: on
         recursive = pp.Forward()
         recursive <<= a + (b + recursive)[...]
 
@@ -6783,33 +6900,42 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 self.elements = elements
 
             def __str__(self):
-                return 'AnnotatedToken(%r, %r)' % (self.kind, self.elements)
+                return "AnnotatedToken(%r, %r)" % (self.kind, self.elements)
 
             def __eq__(self, other):
-                return type(self) == type(other) and self.kind == other.kind and self.elements == other.elements
+                return (
+                    type(self) == type(other)
+                    and self.kind == other.kind
+                    and self.elements == other.elements
+                )
 
             __repr__ = __str__
 
         def annotate(name):
             def _(t):
                 return AnnotatedToken(name, t.asList())
+
             return _
 
-        identifier = pp.Word(pp.srange('[a-z0-9]'))
+        identifier = pp.Word(pp.srange("[a-z0-9]"))
         numeral = pp.Word(pp.nums)
 
-        named_number_value = pp.Suppress('(') + numeral + pp.Suppress(')')
+        named_number_value = pp.Suppress("(") + numeral + pp.Suppress(")")
         named_number = identifier + named_number_value
 
-        named_number_list = (pp.Suppress('{') +
-                             pp.Group(pp.Optional(pp.delimitedList(named_number))) +
-                             pp.Suppress('}'))
+        named_number_list = (
+            pp.Suppress("{")
+            + pp.Group(pp.Optional(pp.delimitedList(named_number)))
+            + pp.Suppress("}")
+        )
 
         # repro but in #345 - delimitedList silently changes contents of named_number
         named_number_value.setParseAction(annotate("val"))
 
         test_string = "{ x1(1), x2(2) }"
-        expected = [['x1', AnnotatedToken("val", ['1']), 'x2', AnnotatedToken("val", ['2'])]]
+        expected = [
+            ["x1", AnnotatedToken("val", ["1"]), "x2", AnnotatedToken("val", ["2"])]
+        ]
 
         self.assertParseAndCheckList(named_number_list, test_string, expected)
 
@@ -7512,9 +7638,12 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 expr = (expr_a | expr_b)("rexp")
 
             with self.assertDoesNotWarn(
-                UserWarning, msg="warned when And within alternation warning was suppressed"
+                UserWarning,
+                msg="warned when And within alternation warning was suppressed",
             ):
-                expr = (expr_a | expr_b).suppress_warning(pp.Diagnostics.warn_multiple_tokens_in_named_alternation)("rexp")
+                expr = (expr_a | expr_b).suppress_warning(
+                    pp.Diagnostics.warn_multiple_tokens_in_named_alternation
+                )("rexp")
 
             success, report = expr.runTests(
                 """
@@ -7578,9 +7707,12 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 expr = (expr_a ^ expr_b)("rexp")
 
             with self.assertDoesNotWarn(
-                UserWarning, msg="warned when And within alternation warning was suppressed"
+                UserWarning,
+                msg="warned when And within alternation warning was suppressed",
             ):
-                expr = (expr_a ^ expr_b).suppress_warning(pp.Diagnostics.warn_multiple_tokens_in_named_alternation)("rexp")
+                expr = (expr_a ^ expr_b).suppress_warning(
+                    pp.Diagnostics.warn_multiple_tokens_in_named_alternation
+                )("rexp")
 
             expr.runTests(
                 """\
@@ -7758,7 +7890,13 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 msg="warned when named repetition of"
                 " ungrouped named expressions warning was suppressed",
             ):
-                path = coord[...].suppress_warning(pp.Diagnostics.warn_ungrouped_named_tokens_in_collection).setResultsName("path")
+                path = (
+                    coord[...]
+                    .suppress_warning(
+                        pp.Diagnostics.warn_ungrouped_named_tokens_in_collection
+                    )
+                    .setResultsName("path")
+                )
 
     def testDontWarnUngroupedNamedTokensIfWarningSuppressed(self):
         with ppt.reset_pyparsing_context():
@@ -7799,7 +7937,9 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 UserWarning,
                 msg="warned when naming an empty Forward expression warning was suppressed",
             ):
-                base.suppress_warning(pp.Diagnostics.warn_name_set_on_empty_Forward)("x")
+                base.suppress_warning(pp.Diagnostics.warn_name_set_on_empty_Forward)(
+                    "x"
+                )
 
     def testWarnParsingEmptyForward(self):
         """
@@ -7833,8 +7973,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                     pass
 
             with self.assertDoesNotWarn(
-                    UserWarning,
-                    msg="warned when parsing using an empty Forward expression warning was suppressed",
+                UserWarning,
+                msg="warned when parsing using an empty Forward expression warning was suppressed",
             ):
                 base.suppress_warning(pp.Diagnostics.warn_on_parse_using_empty_Forward)
                 try:
@@ -7872,7 +8012,9 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 a_method()
 
             def a_method():
-                base = pp.Forward().suppress_warning(pp.Diagnostics.warn_on_assignment_to_Forward)
+                base = pp.Forward().suppress_warning(
+                    pp.Diagnostics.warn_on_assignment_to_Forward
+                )
                 base = pp.Word(pp.alphas)[...] | "(" + base + ")"
 
             with self.assertDoesNotWarn(
@@ -7880,7 +8022,6 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 msg="warned when using '=' to assign expression to a Forward warning was suppressed",
             ):
                 a_method()
-
 
     def testWarnOnMultipleStringArgsToOneOf(self):
         """
@@ -7951,7 +8092,9 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         source = "ABC, ABC,ABC"
         with self.assertRaises(ValueError, msg="min must be greater than 0"):
             pp.delimited_list("ABC", min=0)
-        with self.assertRaises(ValueError, msg="max must be greater than, or equal to min"):
+        with self.assertRaises(
+            ValueError, msg="max must be greater than, or equal to min"
+        ):
             pp.delimited_list("ABC", min=1, max=0)
         with self.assertRaises(pp.ParseException):
             pp.delimited_list("ABC", min=4).parse_string(source)
@@ -8273,7 +8416,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseAndCheckList(
             pp.Word("ABCDEMNXYZ"),
             "ABCDEMNXYZABCDEMNXYZABCDEMNXYZ",
-            ["ABCDEMNXYZABCDEMNXYZABCDEMNXYZ"]
+            ["ABCDEMNXYZABCDEMNXYZABCDEMNXYZ"],
         )
 
     def testWordInternalReRangesKnownSet(self):
@@ -8288,12 +8431,14 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         failed = []
         for word_string, expected_re in tests:
             try:
-                msg = "failed to generate correct internal re for {!r}".format(word_string)
+                msg = "failed to generate correct internal re for {!r}".format(
+                    word_string
+                )
                 resultant_re = pp.Word(word_string).reString
                 self.assertEqual(
                     expected_re,
                     resultant_re,
-                    msg + "; expected {!r} got {!r}".format(expected_re, resultant_re)
+                    msg + "; expected {!r} got {!r}".format(expected_re, resultant_re),
                 )
             except AssertionError:
                 failed.append(msg)
@@ -8504,19 +8649,27 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         )
 
     def testChainedTernaryOperator(self):
+        # fmt: off
         TERNARY_INFIX = pp.infixNotation(
-            ppc.integer, [(("?", ":"), 3, pp.opAssoc.LEFT)]
+            ppc.integer,
+            [
+                (("?", ":"), 3, pp.opAssoc.LEFT),
+            ]
         )
         self.assertParseAndCheckList(
             TERNARY_INFIX, "1?1:0?1:0", [[1, "?", 1, ":", 0, "?", 1, ":", 0]]
         )
 
         TERNARY_INFIX = pp.infixNotation(
-            ppc.integer, [(("?", ":"), 3, pp.opAssoc.RIGHT)]
+            ppc.integer,
+            [
+                (("?", ":"), 3, pp.opAssoc.RIGHT),
+            ]
         )
         self.assertParseAndCheckList(
             TERNARY_INFIX, "1?1:0?1:0", [[1, "?", 1, ":", [0, "?", 1, ":", 0]]]
         )
+        # fmt: on
 
     def testOneOfWithDuplicateSymbols(self):
         # test making oneOf with duplicate symbols
@@ -9371,8 +9524,8 @@ class Test11_LR1_Recursion(ppt.TestParseResultsAsserts, TestCase):
         self.assertEqual(expr.parseString("1----3")[0], 1 - ---3)
         self.assertEqual(expr.parseString("1+2*3")[0], 1 + 2 * 3)
         self.assertEqual(expr.parseString("1*2+3")[0], 1 * 2 + 3)
-        self.assertEqual(expr.parseString("1*2^3")[0], 1 * 2 ** 3)
-        self.assertEqual(expr.parseString("4^3^2^1")[0], 4 ** 3 ** 2 ** 1)
+        self.assertEqual(expr.parseString("1*2^3")[0], 1 * 2**3)
+        self.assertEqual(expr.parseString("4^3^2^1")[0], 4**3**2**1)
 
     def test_terminate_empty(self):
         """Recursion with ``Empty`` terminates"""
