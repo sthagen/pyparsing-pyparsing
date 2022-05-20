@@ -1639,12 +1639,29 @@ class ParserElement(ABC):
         Note that ``expr[..., n]`` and ``expr[m, n]``do not raise an exception
         if more than ``n`` ``expr``s exist in the input stream.  If this behavior is
         desired, then write ``expr[..., n] + ~expr``.
+
+        For repetition with a stop_on expression, use slice notation:
+
+        - ``expr[...: end_expr]`` and ``expr[0, ...: end_expr]`` are equivalent to ``ZeroOrMore(expr, stop_on=end_expr)``
+        - ``expr[1, ...: end_expr]`` is equivalent to ``OneOrMore(expr, stop_on=end_expr)``
+
         """
 
+        stop_on_defined = False
+        stop_on = NoMatch()
+        if isinstance(key, slice):
+            key, stop_on = key.start, key.stop
+            if key is None:
+                key = ...
+            stop_on_defined = True
+        elif isinstance(key, tuple) and isinstance(key[-1], slice):
+            key, stop_on = (key[0], key[1].start), key[1].stop
+            stop_on_defined = True
+
         # convert single arg keys to tuples
+        if isinstance(key, str_type):
+            key = (key,)
         try:
-            if isinstance(key, str_type):
-                key = (key,)
             iter(key)
         except TypeError:
             key = (key, key)
@@ -1658,6 +1675,11 @@ class ParserElement(ABC):
 
         # clip to 2 elements
         ret = self * tuple(key[:2])
+        ret = typing.cast(_MultipleMatch, ret)
+
+        if stop_on_defined:
+            ret.stopOn(stop_on)
+
         return ret
 
     def __call__(self, name: str = None) -> "ParserElement":
@@ -2148,6 +2170,7 @@ class ParserElement(ABC):
         vertical: int = 3,
         show_results_names: bool = False,
         show_groups: bool = False,
+        embed: bool = False,
         **kwargs,
     ) -> None:
         """
@@ -2161,6 +2184,8 @@ class ParserElement(ABC):
         - show_results_names - bool flag whether diagram should show annotations for
           defined results names
         - show_groups - bool flag whether groups should be highlighted with an unlabeled surrounding box
+        - embed - bool flag whether generated HTML should omit <HEAD>, <BODY>, and <DOCTYPE> tags to embed
+          the resulting HTML in an enclosing HTML source
         Additional diagram-formatting keyword arguments can also be included;
         see railroad.Diagram class.
         """
@@ -2183,10 +2208,10 @@ class ParserElement(ABC):
         )
         if isinstance(output_html, (str, Path)):
             with open(output_html, "w", encoding="utf-8") as diag_file:
-                diag_file.write(railroad_to_html(railroad))
+                diag_file.write(railroad_to_html(railroad, embed=embed))
         else:
             # we were passed a file-like object, just write to it
-            output_html.write(railroad_to_html(railroad))
+            output_html.write(railroad_to_html(railroad, embed=embed))
 
     setDefaultWhitespaceChars = set_default_whitespace_chars
     inlineLiteralsUsing = inline_literals_using
@@ -5045,7 +5070,7 @@ class SkipTo(ParseElementEnhance):
         self,
         other: Union[ParserElement, str],
         include: bool = False,
-        ignore: bool = None,
+        ignore: typing.Optional[Union[ParserElement, str]] = None,
         fail_on: typing.Optional[Union[ParserElement, str]] = None,
         *,
         failOn: Union[ParserElement, str] = None,
@@ -5660,7 +5685,7 @@ line_end = LineEnd().set_name("line_end")
 string_start = StringStart().set_name("string_start")
 string_end = StringEnd().set_name("string_end")
 
-_escapedPunc = Word(_bslash, r"\[]-*.$+^?()~ ", exact=2).set_parse_action(
+_escapedPunc = Regex(r"\\[\\[\]\/\-\*\.\$\+\^\?()~ ]").set_parse_action(
     lambda s, l, t: t[0][1]
 )
 _escapedHexChar = Regex(r"\\0?[xX][0-9a-fA-F]+").set_parse_action(
@@ -5677,7 +5702,7 @@ _reBracketExpr = (
     Literal("[")
     + Opt("^").set_results_name("negate")
     + Group(OneOrMore(_charRange | _singleChar)).set_results_name("body")
-    + "]"
+    + Literal("]")
 )
 
 
@@ -5714,7 +5739,7 @@ def srange(s: str) -> str:
     )
     try:
         return "".join(_expanded(part) for part in _reBracketExpr.parse_string(s).body)
-    except Exception:
+    except Exception as e:
         return ""
 
 

@@ -1,4 +1,6 @@
 import unittest
+from io import StringIO
+from pathlib import Path
 from typing import List
 
 from examples.jsonParser import jsonObject
@@ -10,6 +12,9 @@ import pyparsing as pp
 import tempfile
 import os
 import sys
+
+
+curdir = Path(__file__).parent
 
 
 class TestRailroadDiagrams(unittest.TestCase):
@@ -56,19 +61,25 @@ class TestRailroadDiagrams(unittest.TestCase):
     def test_json(self):
         railroad = self.generate_railroad(jsonObject, "jsonObject")
         assert len(railroad) == 9
-        railroad = self.generate_railroad(jsonObject, "jsonObject", show_results_names=True)
+        railroad = self.generate_railroad(
+            jsonObject, "jsonObject", show_results_names=True
+        )
         assert len(railroad) == 9
 
     def test_sql(self):
         railroad = self.generate_railroad(simpleSQL, "simpleSQL")
         assert len(railroad) == 18
-        railroad = self.generate_railroad(simpleSQL, "simpleSQL", show_results_names=True)
+        railroad = self.generate_railroad(
+            simpleSQL, "simpleSQL", show_results_names=True
+        )
         assert len(railroad) == 18
 
     def test_calendars(self):
         railroad = self.generate_railroad(calendars, "calendars")
         assert len(railroad) == 13
-        railroad = self.generate_railroad(calendars, "calendars", show_results_names=True)
+        railroad = self.generate_railroad(
+            calendars, "calendars", show_results_names=True
+        )
         assert len(railroad) == 13
 
     def test_nested_forward_with_inner_and_outer_names(self):
@@ -78,7 +89,9 @@ class TestRailroadDiagrams(unittest.TestCase):
 
         railroad = self.generate_railroad(outer, "inner_outer_names")
         assert len(railroad) == 2
-        railroad = self.generate_railroad(outer, "inner_outer_names", show_results_names=True)
+        railroad = self.generate_railroad(
+            outer, "inner_outer_names", show_results_names=True
+        )
         assert len(railroad) == 2
 
     def test_nested_forward_with_inner_name_only(self):
@@ -102,7 +115,9 @@ class TestRailroadDiagrams(unittest.TestCase):
         ).setName("int-word-uuid in any order")
         railroad = self.generate_railroad(grammar, "each_expression")
         assert len(railroad) == 2
-        railroad = self.generate_railroad(grammar, "each_expression", show_results_names=True)
+        railroad = self.generate_railroad(
+            grammar, "each_expression", show_results_names=True
+        )
         assert len(railroad) == 2
 
     def test_none_name(self):
@@ -122,9 +137,49 @@ class TestRailroadDiagrams(unittest.TestCase):
     def test_complete_combine_element(self):
         ints = pp.Word(pp.nums)
         grammar = pp.Combine(
-            ints('hours') + pp.Literal(":") + ints('minutes') + pp.Literal(":") + ints('seconds')
+            ints("hours")
+            + pp.Literal(":")
+            + ints("minutes")
+            + pp.Literal(":")
+            + ints("seconds")
         )
         railroad = to_railroad(grammar)
         assert len(railroad) == 1
         railroad = to_railroad(grammar, show_results_names=True)
         assert len(railroad) == 1
+
+    def test_create_diagram(self):
+        ints = pp.Word(pp.nums)
+        grammar = pp.Combine(
+            ints("hours")
+            + pp.Literal(":")
+            + ints("minutes")
+            + pp.Literal(":")
+            + ints("seconds")
+        )
+
+        diag_strio = StringIO()
+        grammar.create_diagram(output_html=diag_strio)
+        diag_str = diag_strio.getvalue()
+        expected = (curdir / "diag_no_embed.html").read_text()
+        assert diag_str == expected
+
+    def test_create_diagram_embed(self):
+        ints = pp.Word(pp.nums)
+        grammar = pp.Combine(
+            ints("hours")
+            + pp.Literal(":")
+            + ints("minutes")
+            + pp.Literal(":")
+            + ints("seconds")
+        )
+
+        diag_strio = StringIO()
+        grammar.create_diagram(output_html=diag_strio, embed=True)
+        diag_str = diag_strio.getvalue()
+        expected = (curdir / "diag_embed.html").read_text()
+        assert diag_str == expected
+
+
+if __name__ == "__main__":
+    unittest.main()
