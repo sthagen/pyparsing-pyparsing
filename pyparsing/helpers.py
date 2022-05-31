@@ -39,12 +39,10 @@ def delimited_list(
     """
     if isinstance(expr, str_type):
         expr = ParserElement._literalStringClass(expr)
+    expr = typing.cast(ParserElement, expr)
 
-    dlName = "{expr} [{delim} {expr}]...{end}".format(
-        expr=str(expr.copy().streamline()),
-        delim=str(delim),
-        end=" [{}]".format(str(delim)) if allow_trailing_delim else "",
-    )
+    expr_copy = expr.copy().streamline()
+    dlName = f"{expr_copy} [{delim} {expr_copy}]...{f' [{delim}]' if allow_trailing_delim else ''}"
 
     if not combine:
         delim = Suppress(delim)
@@ -57,7 +55,7 @@ def delimited_list(
         if min is not None and max <= min:
             raise ValueError("max must be greater than, or equal to min")
         max -= 1
-    delimited_list_expr = expr + (delim + expr)[min, max]
+    delimited_list_expr: ParserElement = expr + (delim + expr)[min, max]
 
     if allow_trailing_delim:
         delimited_list_expr += Opt(delim)
@@ -187,7 +185,7 @@ def match_previous_expr(expr: ParserElement) -> ParserElement:
             theseTokens = _flatten(t.as_list())
             if theseTokens != matchTokens:
                 raise ParseException(
-                    s, l, "Expected {}, found{}".format(matchTokens, theseTokens)
+                    s, l, f"Expected {matchTokens}, found{theseTokens}"
                 )
 
         rep.set_parse_action(must_match_these_tokens, callDuringTry=True)
@@ -293,15 +291,13 @@ def one_of(
         try:
             if all(len(sym) == 1 for sym in symbols):
                 # symbols are just single characters, create range regex pattern
-                patt = "[{}]".format(
-                    "".join(_escape_regex_range_chars(sym) for sym in symbols)
-                )
+                patt = f"[{''.join(_escape_regex_range_chars(sym) for sym in symbols)}]"
             else:
                 patt = "|".join(re.escape(sym) for sym in symbols)
 
             # wrap with \b word break markers if defining as keywords
             if asKeyword:
-                patt = r"\b(?:{})\b".format(patt)
+                patt = rf"\b(?:{patt})\b"
 
             ret = Regex(patt, flags=re_flags).set_name(" | ".join(symbols))
 
@@ -823,19 +819,25 @@ def infix_notation(
     else:
         lastExpr = base_expr | (lpar + ret + rpar)
 
+    arity: int
+    rightLeftAssoc: opAssoc
+    pa: typing.Optional[ParseAction]
+    opExpr1: ParserElement
+    opExpr2: ParserElement
     for i, operDef in enumerate(op_list):
-        opExpr, arity, rightLeftAssoc, pa = (operDef + (None,))[:4]
+        opExpr, arity, rightLeftAssoc, pa = (operDef + (None,))[:4]  # type: ignore[assignment]
         if isinstance(opExpr, str_type):
             opExpr = ParserElement._literalStringClass(opExpr)
+        opExpr = typing.cast(ParserElement, opExpr)
         if arity == 3:
             if not isinstance(opExpr, (tuple, list)) or len(opExpr) != 2:
                 raise ValueError(
                     "if numterms=3, opExpr must be a tuple or list of two expressions"
                 )
             opExpr1, opExpr2 = opExpr
-            term_name = "{}{} term".format(opExpr1, opExpr2)
+            term_name = f"{opExpr1}{opExpr2} term"
         else:
-            term_name = "{} term".format(opExpr)
+            term_name = f"{opExpr} term"
 
         if not 1 <= arity <= 3:
             raise ValueError("operator must be unary (1), binary (2), or ternary (3)")
@@ -843,7 +845,8 @@ def infix_notation(
         if rightLeftAssoc not in (OpAssoc.LEFT, OpAssoc.RIGHT):
             raise ValueError("operator must indicate right or left associativity")
 
-        thisExpr: Forward = Forward().set_name(term_name)
+        thisExpr: ParserElement = Forward().set_name(term_name)
+        thisExpr = typing.cast(Forward, thisExpr)
         if rightLeftAssoc is OpAssoc.LEFT:
             if arity == 1:
                 matchExpr = _FB(lastExpr + opExpr) + Group(lastExpr + opExpr[1, ...])
