@@ -1081,7 +1081,7 @@ class ParserElement(ABC):
           an object with attributes if the given parser includes results names.
 
         If the input string is required to match the entire grammar, ``parse_all`` flag must be set to ``True``. This
-        is also equivalent to ending the grammar with :class:`StringEnd`().
+        is also equivalent to ending the grammar with :class:`StringEnd`\ ().
 
         To report proper column numbers, ``parse_string`` operates on a copy of the input string where all tabs are
         converted to spaces (8 spaces per tab, as per the default in ``string.expandtabs``). If the input string
@@ -1345,7 +1345,7 @@ class ParserElement(ABC):
     def __add__(self, other) -> "ParserElement":
         """
         Implementation of ``+`` operator - returns :class:`And`. Adding strings to a :class:`ParserElement`
-        converts them to :class:`Literal`s by default.
+        converts them to :class:`Literal`\ s by default.
 
         Example::
 
@@ -1427,10 +1427,10 @@ class ParserElement(ABC):
         may also include ``None`` as in:
 
         - ``expr*(n, None)`` or ``expr*(n, )`` is equivalent
-             to ``expr*n + ZeroOrMore(expr)``
-             (read as "at least n instances of ``expr``")
+          to ``expr*n + ZeroOrMore(expr)``
+          (read as "at least n instances of ``expr``")
         - ``expr*(None, n)`` is equivalent to ``expr*(0, n)``
-             (read as "0 to n instances of ``expr``")
+          (read as "0 to n instances of ``expr``")
         - ``expr*(None, None)`` is equivalent to ``ZeroOrMore(expr)``
         - ``expr*(1, None)`` is equivalent to ``OneOrMore(expr)``
 
@@ -1657,7 +1657,7 @@ class ParserElement(ABC):
         If ``name`` is given with a trailing ``'*'`` character, then ``list_all_matches`` will be
         passed as ``True``.
 
-        If ``name` is omitted, same as calling :class:`copy`.
+        If ``name`` is omitted, same as calling :class:`copy`.
 
         Example::
 
@@ -1834,7 +1834,9 @@ class ParserElement(ABC):
     def set_name(self, name: str) -> "ParserElement":
         """
         Define name for this expression, makes debugging and exception messages clearer.
+
         Example::
+
             Word(nums).parse_string("ABC")  # -> Exception: Expected W:(0-9) (at char 0), (line:1, col:1)
             Word(nums).set_name("integer").parse_string("ABC")  # -> Exception: Expected integer (at char 0), (line:1, col:1)
         """
@@ -2722,6 +2724,11 @@ class Word(Token):
                 "cannot specify a minimum length < 1; use Opt(Word()) if zero-length word is permitted"
             )
 
+        if self.maxSpecified and min > max:
+            raise ValueError(
+                f"invalid args, if min and max both specified min must be <= max (min={min}, max={max})"
+            )
+
         self.minLen = min
 
         if max > 0:
@@ -2730,6 +2737,7 @@ class Word(Token):
             self.maxLen = _MAX_INT
 
         if exact > 0:
+            min = max = exact
             self.maxLen = exact
             self.minLen = exact
 
@@ -2738,39 +2746,43 @@ class Word(Token):
         self.asKeyword = asKeyword
 
         # see if we can make a regex for this Word
-        if " " not in self.initChars | self.bodyChars and (min == 1 and exact == 0):
+        if " " not in (self.initChars | self.bodyChars):
+            if len(self.initChars) == 1:
+                re_leading_fragment = re.escape(self.initCharsOrig)
+            else:
+                re_leading_fragment = f"[{_collapse_string_to_ranges(self.initChars)}]"
+
             if self.bodyChars == self.initChars:
                 if max == 0:
                     repeat = "+"
                 elif max == 1:
                     repeat = ""
                 else:
-                    repeat = f"{{{self.minLen},{'' if self.maxLen == _MAX_INT else self.maxLen}}}"
-                self.reString = (
-                    f"[{_collapse_string_to_ranges(self.initChars)}]{repeat}"
-                )
-            elif len(self.initChars) == 1:
-                if max == 0:
-                    repeat = "*"
-                else:
-                    repeat = f"{{0,{max - 1}}}"
-                self.reString = (
-                    f"{re.escape(self.initCharsOrig)}"
-                    f"[{_collapse_string_to_ranges(self.bodyChars)}]"
-                    f"{repeat}"
-                )
+                    if self.minLen != self.maxLen:
+                        repeat = f"{{{self.minLen},{'' if self.maxLen == _MAX_INT else self.maxLen}}}"
+                    else:
+                        repeat = f"{{{self.minLen}}}"
+                self.reString = f"{re_leading_fragment}{repeat}"
             else:
-                if max == 0:
-                    repeat = "*"
-                elif max == 2:
+                if max == 1:
+                    re_body_fragment = ""
                     repeat = ""
                 else:
-                    repeat = f"{{0,{max - 1}}}"
+                    re_body_fragment = f"[{_collapse_string_to_ranges(self.bodyChars)}]"
+                    if max == 0:
+                        repeat = "*"
+                    elif max == 2:
+                        repeat = "?" if min <= 1 else ""
+                    else:
+                        if min != max:
+                            repeat = f"{{{min - 1 if min > 0 else 0},{max - 1}}}"
+                        else:
+                            repeat = f"{{{min - 1 if min > 0 else 0}}}"
+
                 self.reString = (
-                    f"[{_collapse_string_to_ranges(self.initChars)}]"
-                    f"[{_collapse_string_to_ranges(self.bodyChars)}]"
-                    f"{repeat}"
+                    f"{re_leading_fragment}" f"{re_body_fragment}" f"{repeat}"
                 )
+
             if self.asKeyword:
                 self.reString = rf"\b{self.reString}\b"
 
