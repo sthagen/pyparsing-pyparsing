@@ -56,7 +56,7 @@ self-explanatory class names, and the use of :class:`'+'<And>`,
 :class:`'|'<MatchFirst>`, :class:`'^'<Or>` and :class:`'&'<Each>` operators.
 
 The :class:`ParseResults` object returned from
-:class:`ParserElement.parseString` can be
+:class:`ParserElement.parse_string` can be
 accessed as a nested list, a dictionary, or an object with named
 attributes.
 
@@ -121,7 +121,7 @@ class version_info(NamedTuple):
 
 
 __version_info__ = version_info(3, 0, 10, "final", 0)
-__version_time__ = "16 Jun 2022 07:11 UTC"
+__version_time__ = "16 Jun 2022 23:12 UTC"
 __version__ = __version_info__.__version__
 __versionTime__ = __version_time__
 __author__ = "Paul McGuire <ptmcg.gm+pyparsing@gmail.com>"
