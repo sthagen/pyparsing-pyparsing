@@ -9,14 +9,13 @@ from .util import (
     _bslash,
     _flatten,
     _escape_regex_range_chars,
-    replaces_prePEP8_function,
+    replaced_by_pep8,
 )
 
 
 #
 # global helpers
 #
-@replaces_prePEP8_function("delimitedList")
 def delimited_list(
     expr: Union[str, ParserElement],
     delim: Union[str, ParserElement] = ",",
@@ -72,7 +71,6 @@ def delimited_list(
         return delimited_list_expr.set_name(dlName)
 
 
-@replaces_prePEP8_function("countedArray")
 def counted_array(
     expr: ParserElement,
     int_expr: typing.Optional[ParserElement] = None,
@@ -133,7 +131,6 @@ def counted_array(
     return (intExpr + array_expr).set_name("(len) " + str(expr) + "...")
 
 
-@replaces_prePEP8_function("matchPreviousLiteral")
 def match_previous_literal(expr: ParserElement) -> ParserElement:
     """Helper to define an expression that is indirectly defined from
     the tokens matched in a previous expression, that is, it looks for
@@ -167,7 +164,6 @@ def match_previous_literal(expr: ParserElement) -> ParserElement:
     return rep
 
 
-@replaces_prePEP8_function("matchPreviousExpr")
 def match_previous_expr(expr: ParserElement) -> ParserElement:
     """Helper to define an expression that is indirectly defined from
     the tokens matched in a previous expression, that is, it looks for
@@ -204,7 +200,6 @@ def match_previous_expr(expr: ParserElement) -> ParserElement:
     return rep
 
 
-@replaces_prePEP8_function("oneOf")
 def one_of(
     strs: Union[typing.Iterable[str], str],
     caseless: bool = False,
@@ -330,7 +325,6 @@ def one_of(
     )
 
 
-@replaces_prePEP8_function("dictOf")
 def dict_of(key: ParserElement, value: ParserElement) -> ParserElement:
     """Helper to easily and clearly define a dictionary by specifying
     the respective patterns for the key and value.  Takes care of
@@ -371,7 +365,6 @@ def dict_of(key: ParserElement, value: ParserElement) -> ParserElement:
     return Dict(OneOrMore(Group(key + value)))
 
 
-@replaces_prePEP8_function("originalTextFor")
 def original_text_for(
     expr: ParserElement, as_string: bool = True, *, asString: bool = True
 ) -> ParserElement:
@@ -379,7 +372,7 @@ def original_text_for(
     expression.  Useful to restore the parsed fields of an HTML start
     tag into the raw tag text itself, or to revert separate tokens with
     intervening whitespace back to the original matching input text. By
-    default, returns astring containing the original parsed text.
+    default, returns a string containing the original parsed text.
 
     If the optional ``as_string`` argument is passed as
     ``False``, then the return value is
@@ -398,7 +391,7 @@ def original_text_for(
         src = "this is test <b> bold <i>text</i> </b> normal text "
         for tag in ("b", "i"):
             opener, closer = make_html_tags(tag)
-            patt = original_text_for(opener + SkipTo(closer) + closer)
+            patt = original_text_for(opener + ... + closer)
             print(patt.search_string(src)[0])
 
     prints::
@@ -467,7 +460,6 @@ def locatedExpr(expr: ParserElement) -> ParserElement:
     )
 
 
-@replaces_prePEP8_function("nestedExpr")
 def nested_expr(
     opener: Union[str, ParserElement] = "(",
     closer: Union[str, ParserElement] = ")",
@@ -655,7 +647,6 @@ def _makeTags(tagStr, xml, suppress_LT=Suppress("<"), suppress_GT=Suppress(">"))
     return openTag, closeTag
 
 
-@replaces_prePEP8_function("makeHTMLTags")
 def make_html_tags(
     tag_str: Union[str, ParserElement]
 ) -> Tuple[ParserElement, ParserElement]:
@@ -683,7 +674,6 @@ def make_html_tags(
     return _makeTags(tag_str, False)
 
 
-@replaces_prePEP8_function("makeXMLTags")
 def make_xml_tags(
     tag_str: Union[str, ParserElement]
 ) -> Tuple[ParserElement, ParserElement]:
@@ -707,7 +697,6 @@ common_html_entity = Regex("&(?P<entity>" + "|".join(_htmlEntityMap) + ");").set
 )
 
 
-@replaces_prePEP8_function("replaceHTMLEntity")
 def replace_html_entity(s, l, t):
     """Helper parser action to replace common HTML entities with their special characters"""
     return _htmlEntityMap.get(t.entity)
@@ -739,7 +728,6 @@ InfixNotationOperatorSpec = Union[
 ]
 
 
-@replaces_prePEP8_function("infixNotation")
 def infix_notation(
     base_expr: ParserElement,
     op_list: List[InfixNotationOperatorSpec],
@@ -782,11 +770,11 @@ def infix_notation(
         ``set_parse_action(*fn)``
         (:class:`ParserElement.set_parse_action`)
     - ``lpar`` - expression for matching left-parentheses; if passed as a
-      str, then will be parsed as Suppress(lpar). If lpar is passed as
+      str, then will be parsed as ``Suppress(lpar)``. If lpar is passed as
       an expression (such as ``Literal('(')``), then it will be kept in
       the parsed results, and grouped with them. (default= ``Suppress('(')``)
     - ``rpar`` - expression for matching right-parentheses; if passed as a
-      str, then will be parsed as Suppress(rpar). If rpar is passed as
+      str, then will be parsed as ``Suppress(rpar)``. If rpar is passed as
       an expression (such as ``Literal(')')``), then it will be kept in
       the parsed results, and grouped with them. (default= ``Suppress(')')``)
 
@@ -817,6 +805,9 @@ def infix_notation(
 
         (5+3)*6
         [[[5, '+', 3], '*', 6]]
+
+        (5+x)*y
+        [[[5, '+', 'x'], '*', 'y']]
 
         -2--11
         [[['-', 2], '-', ['-', 11]]]
@@ -915,7 +906,7 @@ def infix_notation(
 
 def indentedBlock(blockStatementExpr, indentStack, indent=True, backup_stacks=[]):
     """
-    (DEPRECATED - use IndentedBlock class instead)
+    (DEPRECATED - use ``IndentedBlock`` class instead)
     Helper method for defining space-delimited indentation blocks,
     such as those used to define block statements in Python source code.
 
@@ -1089,6 +1080,7 @@ _builtin_exprs: List[ParserElement] = [
 
 
 # pre-PEP8 compatible names
+# fmt: off
 opAssoc = OpAssoc
 anyOpenTag = any_open_tag
 anyCloseTag = any_close_tag
@@ -1100,3 +1092,40 @@ dblSlashComment = dbl_slash_comment
 cppStyleComment = cpp_style_comment
 javaStyleComment = java_style_comment
 pythonStyleComment = python_style_comment
+
+@replaced_by_pep8(delimited_list)
+def delimitedList(): ...
+
+@replaced_by_pep8(counted_array)
+def countedArray(): ...
+
+@replaced_by_pep8(match_previous_literal)
+def matchPreviousLiteral(): ...
+
+@replaced_by_pep8(match_previous_expr)
+def matchPreviousExpr(): ...
+
+@replaced_by_pep8(one_of)
+def oneOf(): ...
+
+@replaced_by_pep8(dict_of)
+def dictOf(): ...
+
+@replaced_by_pep8(original_text_for)
+def originalTextFor(): ...
+
+@replaced_by_pep8(nested_expr)
+def nestedExpr(): ...
+
+@replaced_by_pep8(make_html_tags)
+def makeHTMLTags(): ...
+
+@replaced_by_pep8(make_xml_tags)
+def makeXMLTags(): ...
+
+@replaced_by_pep8(replace_html_entity)
+def replaceHTMLEntity(): ...
+
+@replaced_by_pep8(infix_notation)
+def infixNotation(): ...
+# fmt: on
