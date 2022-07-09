@@ -1084,7 +1084,7 @@ class ParserElement(ABC):
           an object with attributes if the given parser includes results names.
 
         If the input string is required to match the entire grammar, ``parse_all`` flag must be set to ``True``. This
-        is also equivalent to ending the grammar with :class:`StringEnd`\ ().
+        is also equivalent to ending the grammar with :class:`StringEnd`\\ ().
 
         To report proper column numbers, ``parse_string`` operates on a copy of the input string where all tabs are
         converted to spaces (8 spaces per tab, as per the default in ``string.expandtabs``). If the input string
@@ -1348,7 +1348,7 @@ class ParserElement(ABC):
     def __add__(self, other) -> "ParserElement":
         """
         Implementation of ``+`` operator - returns :class:`And`. Adding strings to a :class:`ParserElement`
-        converts them to :class:`Literal`\ s by default.
+        converts them to :class:`Literal`\\ s by default.
 
         Example::
 
@@ -1585,8 +1585,8 @@ class ParserElement(ABC):
 
         ``None`` may be used in place of ``...``.
 
-        Note that ``expr[..., n]`` and ``expr[m, n]``do not raise an exception
-        if more than ``n`` ``expr``s exist in the input stream.  If this behavior is
+        Note that ``expr[..., n]`` and ``expr[m, n]`` do not raise an exception
+        if more than ``n`` ``expr``\\ s exist in the input stream.  If this behavior is
         desired, then write ``expr[..., n] + ~expr``.
 
         For repetition with a stop_on expression, use slice notation:
@@ -2348,6 +2348,10 @@ class Literal(Token):
         # Default behavior
         return super().__new__(cls)
 
+    # Needed to make copy.copy() work correctly if we customize __new__
+    def __getnewargs__(self):
+        return (self.match,)
+
     def __init__(self, match_string: str = "", *, matchString: str = ""):
         super().__init__()
         match_string = matchString or match_string
@@ -2357,14 +2361,6 @@ class Literal(Token):
         self.errmsg = "Expected " + self.name
         self.mayReturnEmpty = False
         self.mayIndexError = False
-
-    def __copy__(self) -> "Literal":
-        # Needed to assist copy.copy() (used in ParserElement.copy), which
-        # doesn't handle the factory __new__ well.
-        obj = Literal(self.match)
-        # Copy instance attributes
-        obj.__dict__.update(self.__dict__)
-        return obj
 
     def _generateDefaultName(self) -> str:
         return repr(self.match)
