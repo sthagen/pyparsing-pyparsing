@@ -356,6 +356,8 @@ methods for code to use are:
         ^
     FAIL: Expected numeric digits, found end of text  (at char 4), (line:1, col:5)
 
+.. _set_results_name:
+
 - ``set_results_name(string, list_all_matches=False)`` - name to be given
   to tokens matching
   the element; if multiple tokens within
@@ -543,16 +545,21 @@ Basic ParserElement subclasses
 
   - ``max`` - indicating a maximum length of matching characters
 
-  - ``exact`` - indicating an exact length of matching characters
+  - ``exact`` - indicating an exact length of matching characters;
+    if ``exact`` is specified, it will override any values for ``min`` or ``max``
 
-  If ``exact`` is specified, it will override any values for ``min`` or ``max``.
+  - ``as_keyword`` - indicating that preceding and following characters must
+    be whitespace or non-keyword characters
 
-  Sometimes you want to define a word using all
-  characters in a range except for one or two of them; you can do this
-  with the new ``exclude_chars`` argument. This is helpful if you want to define
-  a word with all ``printables`` except for a single delimiter character, such
-  as '.'. Previously, you would have to create a custom string to pass to Word.
-  With this change, you can just create ``Word(printables, exclude_chars='.')``.
+  - ``exclude_chars`` - a string of characters that should be excluded from
+    init_chars and body_chars
+
+    Sometimes you want to define a word using all
+    characters in a range except for one or two of them; you can do this
+    with the ``exclude_chars`` argument. This is helpful if you want to define
+    a word with all ``printables`` except for a single delimiter character, such
+    as '.'. Previously, you would have to create a custom string to pass to Word.
+    With this change, you can just create ``Word(printables, exclude_chars='.')``.
 
 - ``Char`` - a convenience form of ``Word`` that will match just a single character from
   a string of matching characters::
@@ -821,7 +828,8 @@ Other classes
           ['abc', ['100', '200', '300'], 'end']
 
       If the ``Group`` is constructed using ``aslist=True``, the resulting tokens
-      will be a Python list instead of a ParseResults_.
+      will be a Python list instead of a ParseResults_. In this case, the returned value will
+      no longer support the extended features or methods of a ParseResults_.
 
   - as a dictionary
 
@@ -833,8 +841,9 @@ Other classes
       input text - in addition to ParseResults_ listed as ``[ [ a1, b1, c1, ...], [ a2, b2, c2, ...]  ]``
       it also acts as a dictionary with entries defined as ``{ a1 : [ b1, c1, ... ] }, { a2 : [ b2, c2, ... ] }``;
       this is especially useful when processing tabular data where the first column contains a key
-      value for that line of data; when constructed with ``aslist=True``, will
-      return an actual Python ``dict`` instead of a ParseResults_.
+      value for that line of data; when constructed with ``asdict=True``, will
+      return an actual Python ``dict`` instead of a ParseResults_. In this case, the returned value will
+      no longer support the extended features or methods of a ParseResults_.
 
     - list elements that are deleted using ``del`` will still be accessible by their
       dictionary keys
@@ -865,6 +874,10 @@ Other classes
   field names that have been defined for any embedded parse elements.
   (The ``pprint`` module is especially good at printing out the nested contents
   given by ``as_list()``.)
+
+  If a ParseResults_ is built with expressions that use results names (see _set_results_name) or
+  using the ``Dict`` class, then those names and values can be extracted as a Python
+  dict using ``as_dict()``.
 
   Finally, ParseResults_ can be viewed by calling ``dump()``. ``dump()`` will first show
   the ``as_list()`` output, followed by an indented structure listing parsed tokens that
