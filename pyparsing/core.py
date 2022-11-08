@@ -440,6 +440,18 @@ class ParserElement(ABC):
         """
         ParserElement._literalStringClass = cls
 
+    @classmethod
+    def using_each(cls, seq, **class_kwargs):
+        """
+        Yields a sequence of class(obj, **class_kwargs) for obj in seq.
+
+        Example::
+
+            LPAR, RPAR, LBRACE, RBRACE, SEMI = Suppress.using_each("(){};")
+
+        """
+        yield from (cls(obj, **class_kwargs) for obj in seq)
+
     class DebugActions(NamedTuple):
         debug_try: typing.Optional[DebugStartAction]
         debug_match: typing.Optional[DebugSuccessAction]
@@ -1892,6 +1904,11 @@ class ParserElement(ABC):
         """
         Check defined expressions for valid structure, check for infinite recursive definitions.
         """
+        warnings.warn(
+            "ParserElement.validate() is deprecated, and should not be used to check for left recursion",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._checkRecursion([])
 
     def parse_file(
@@ -3799,6 +3816,11 @@ class ParseExpression(ParserElement):
         return self
 
     def validate(self, validateTrace=None) -> None:
+        warnings.warn(
+            "ParserElement.validate() is deprecated, and should not be used to check for left recursion",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         tmp = (validateTrace if validateTrace is not None else [])[:] + [self]
         for e in self.exprs:
             e.validate(tmp)
@@ -4538,6 +4560,11 @@ class ParseElementEnhance(ParserElement):
             self.expr._checkRecursion(subRecCheckList)
 
     def validate(self, validateTrace=None) -> None:
+        warnings.warn(
+            "ParserElement.validate() is deprecated, and should not be used to check for left recursion",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if validateTrace is None:
             validateTrace = []
         tmp = validateTrace[:] + [self]
@@ -5443,6 +5470,11 @@ class Forward(ParseElementEnhance):
         return self
 
     def validate(self, validateTrace=None) -> None:
+        warnings.warn(
+            "ParserElement.validate() is deprecated, and should not be used to check for left recursion",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if validateTrace is None:
             validateTrace = []
 

@@ -101,10 +101,26 @@ class TestCase(unittest.TestCase):
 
         if getattr(ar, "exception", None) is not None:
             print(
-                f"Raised expected exception: {type(ar.exception).__name__}: {str(ar.exception)}"
+                f"Raised expected exception: {type(ar.exception).__name__}: {ar.exception}"
             )
         else:
             print(f"Expected {expected_exception_type.__name__} exception not raised")
+        return ar
+
+    @contextlib.contextmanager
+    def assertWarns(self, expected_warning_type: Any, msg: Any = None):
+        """
+        Simple wrapper to print out the warnings raised after assertWarns
+        """
+        with super().assertWarns(expected_warning_type, msg=msg) as ar:
+            yield
+
+        if getattr(ar, "warning", None) is not None:
+            print(
+                f"Raised expected warning: {type(ar.warning).__name__}: {ar.warning}"
+            )
+        else:
+            print(f"Expected {expected_warning_type.__name__} warning not raised")
         return ar
 
     @contextlib.contextmanager
@@ -1685,6 +1701,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
 
         exprs = [
             word[...] + num,
+            word * ... + num,
             word[0, ...] + num,
             word[1, ...] + num,
             word[2, ...] + num,
@@ -1693,6 +1710,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         ]
 
         expected_res = [
+            r"([abcd]+ )*\d+",
             r"([abcd]+ )*\d+",
             r"([abcd]+ )*\d+",
             r"([abcd]+ )+\d+",
@@ -9095,7 +9113,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         def testValidation(grmr, gnam, isValid):
             try:
                 grmr.streamline()
-                grmr.validate()
+                with self.assertWarns(DeprecationWarning, msg="failed to warn validate() is deprecated"):
+                    grmr.validate()
                 self.assertTrue(isValid, "validate() accepted invalid grammar " + gnam)
             except pp.RecursiveGrammarException as rge:
                 print(grmr)

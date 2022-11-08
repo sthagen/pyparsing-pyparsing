@@ -6,9 +6,9 @@ Version 3.0.10 - (in development)
 ---------------------------------
 NOTE: In the future release 3.1.0, use of many of the pre-PEP8 methods (such as
 `ParserElement.parseString`) will start to raise `DeprecationWarnings`. 3.1.0 should
-get released some time in August or September, 2022. I currently plan to completely
+get released some time in early 2023. I currently plan to completely
 drop the pre-PEP8 methods in pyparsing 4.0, though we won't see that release until
-at least late 2023. So there is plenty of time to convert existing parsers to
+at least late 2023 or early 2024. So there is plenty of time to convert existing parsers to
 the new function names before the old functions are completely removed. (Big
 help from Devin J. Pohly in structuring the code to enable this peaceful transition.)
 
@@ -46,9 +46,38 @@ help from Devin J. Pohly in structuring the code to enable this peaceful transit
 
       ['BEGIN', ['aaa', 'bbb', 'ccc'], 'END']
 
+- `ParserElement.validate()` is deprecated. It predates the support for left-recursive
+  parsers, and was prone to false positives (warning that a grammar was invalid when
+  it was in fact valid).  It will be removed in a future pyparsing release. In its
+  place, developers should use debugging and analytical tools, such as `ParserElement.set_debug()`
+  and `ParserElement.create_diagram()`.
+  (Raised in Issue #444, thanks Andrea Micheli!)
+
 - Added new builtin `python_quoted_string`, which will match any form
   of single-line or multiline quoted strings defined in Python. (Inspired
   by discussion with Andreas Schörgenhumer in Issue #421.)
+
+- Added new class method `ParserElement.using_each`, to simplify code
+  that creates a sequence of `Literals`, `Keywords`, or other `ParserElement`
+  subclasses.
+
+  For instance, to define suppressable punctuation, one would previously
+  write:
+
+      LPAR, RPAR, LBRACE, RBRACE, SEMI = map(Suppress, "(){};")
+
+  You can now write:
+
+      LPAR, RPAR, LBRACE, RBRACE, SEMI = Suppress.using_each("(){};")
+
+  `using_each` will also accept optional keyword args, which it will
+  pass through to the class initializer. Here is an expression for
+  single-letter variable names that might be used in an algebraic
+  expression:
+
+      algebra_var = MatchFirst(
+          Char.using_each(string.ascii_lowercase, as_keyword=True)
+      )
 
 - Added bool `embed` argument to `ParserElement.create_diagram()`.
   When passed as True, the resulting diagram will omit the `<DOCTYPE>`,
@@ -59,6 +88,8 @@ help from Devin J. Pohly in structuring the code to enable this peaceful transit
 - Added `recurse` argument to `ParserElement.set_debug` to set the
   debug flag on an expression and all of its sub-expressions. Requested
   by multimeric in Issue #399.
+
+- Added '·' (Unicode MIDDLE DOT) to the set of Latin1.identbodychars.
 
 - Fixed bug in `Word` when `max=2`. Also added performance enhancement
   when specifying `exact` argument. Reported in issue #409 by

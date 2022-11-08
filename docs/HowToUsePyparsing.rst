@@ -182,7 +182,7 @@ Usage notes
   - ``expr[... ,n]`` is equivalent to ``expr*(0, n)``
     (read as "0 to n instances of expr")
 
-  - ``expr[...]`` and ``expr[0, ...]`` are equivalent to ``ZeroOrMore(expr)``
+  - ``expr[...]``, ``expr[0, ...]`` and ``expr * ...`` are equivalent to ``ZeroOrMore(expr)``
 
   - ``expr[1, ...]`` is equivalent to ``OneOrMore(expr)``
 
@@ -463,7 +463,9 @@ methods for code to use are:
   when trying to match this element
 
 - ``validate()`` - function to verify that the defined grammar does not
-  contain infinitely recursive constructs
+  contain infinitely recursive constructs (``validate()`` is deprecated, and
+  will be removed in a future pyparsing release. Pyparsing now supports
+  left-recursive parsers, which this function attempted to catch.)
 
 .. _parse_with_tabs:
 
@@ -1268,9 +1270,9 @@ Helper parse actions
   ``ParseException`` if matching at a different column number; useful when parsing
   tabular data
 
-- ``common.convert_to_integer()`` - converts all matched tokens to uppercase
+- ``common.convert_to_integer()`` - converts all matched tokens to int
 
-- ``common.convert_to_float()`` - converts all matched tokens to uppercase
+- ``common.convert_to_float()`` - converts all matched tokens to float
 
 - ``common.convert_to_date()`` - converts matched token to a datetime.date
 
