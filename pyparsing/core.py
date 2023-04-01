@@ -1552,6 +1552,9 @@ class ParserElement(ABC):
             return _PendingSkip(self, must_skip=True)
 
         if isinstance(other, str_type):
+            # `expr | ""` is equivalent to `Opt(expr)`
+            if other == "":
+                return Opt(self)
             other = self._literalStringClass(other)
         if not isinstance(other, ParserElement):
             return NotImplemented
@@ -3194,7 +3197,7 @@ class QuotedString(Token):
         [['This is the "quote"']]
         [['This is the quote with "embedded" quotes']]
     """
-    ws_map = ((r"\t", "\t"), (r"\n", "\n"), (r"\f", "\f"), (r"\r", "\r"))
+    ws_map = dict(((r"\t", "\t"), (r"\n", "\n"), (r"\f", "\f"), (r"\r", "\r")))
 
     def __init__(
         self,
@@ -3244,6 +3247,7 @@ class QuotedString(Token):
         self.escQuote: str = escQuote or ""
         self.unquoteResults: bool = unquoteResults
         self.convertWhitespaceEscapes: bool = convertWhitespaceEscapes
+        self.multiline = multiline
 
         sep = ""
         inner_pattern = ""
@@ -3292,6 +3296,17 @@ class QuotedString(Token):
             ]
         )
 
+        if self.unquoteResults:
+            if self.convertWhitespaceEscapes:
+                self.unquote_scan_re = re.compile(
+                    rf"({'|'.join(re.escape(k) for k in self.ws_map)})|({re.escape(self.escChar)}.)|(\n|.)",
+                    flags=self.flags,
+                )
+            else:
+                self.unquote_scan_re = re.compile(
+                    rf"({re.escape(self.escChar)}.)|(\n|.)", flags=self.flags
+                )
+
         try:
             self.re = re.compile(self.pattern, self.flags)
             self.reString = self.pattern
@@ -3327,14 +3342,20 @@ class QuotedString(Token):
             ret = ret[self.quoteCharLen : -self.endQuoteCharLen]
 
             if isinstance(ret, str_type):
-                # replace escaped whitespace
-                if "\\" in ret and self.convertWhitespaceEscapes:
-                    for wslit, wschar in self.ws_map:
-                        ret = ret.replace(wslit, wschar)
-
-                # replace escaped characters
-                if self.escChar:
-                    ret = re.sub(self.escCharReplacePattern, r"\g<1>", ret)
+                if self.convertWhitespaceEscapes:
+                    ret = "".join(
+                        self.ws_map[match.group(1)]
+                        if match.group(1)
+                        else match.group(2)[-1]
+                        if match.group(2)
+                        else match.group(3)
+                        for match in self.unquote_scan_re.finditer(ret)
+                    )
+                else:
+                    ret = "".join(
+                        match.group(1)[-1] if match.group(1) else match.group(2)
+                        for match in self.unquote_scan_re.finditer(ret)
+                    )
 
                 # replace escaped quotes
                 if self.escQuote:
@@ -5281,7 +5302,8 @@ class SkipTo(ParseElementEnhance):
     ):
         super().__init__(other)
         failOn = failOn or fail_on
-        self.ignoreExpr = ignore
+        if ignore is not None:
+            self.ignore(ignore)
         self.mayReturnEmpty = True
         self.mayIndexError = False
         self.includeMatch = include
@@ -5299,9 +5321,7 @@ class SkipTo(ParseElementEnhance):
         self_failOn_canParseNext = (
             self.failOn.canParseNext if self.failOn is not None else None
         )
-        self_ignoreExpr_tryParse = (
-            self.ignoreExpr.try_parse if self.ignoreExpr is not None else None
-        )
+        self_preParse = self.preParse if self.callPreparse else None
 
         tmploc = loc
         while tmploc <= instrlen:
@@ -5310,13 +5330,9 @@ class SkipTo(ParseElementEnhance):
                 if self_failOn_canParseNext(instring, tmploc):
                     break
 
-            if self_ignoreExpr_tryParse is not None:
-                # advance past ignore expressions
-                while 1:
-                    try:
-                        tmploc = self_ignoreExpr_tryParse(instring, tmploc)
-                    except ParseBaseException:
-                        break
+            if self_preParse is not None:
+                # skip grammar-ignored expressions
+                tmploc = self_preParse(instring, tmploc)
 
             try:
                 self_expr_parse(instring, tmploc, doActions=False, callPreParse=False)

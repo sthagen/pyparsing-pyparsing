@@ -1265,6 +1265,63 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             )
             self.assertEqual(source, stripped)
 
+    def testQuotedStringUnquotesAndConvertWhitespaceEscapes(self):
+        # test for Issue #474
+        #fmt: off
+        backslash = chr(92)  # a single backslash
+        tab = "\t"
+        newline = "\n"
+        test_string_0 = f'"{backslash}{backslash}n"'              # r"\\n"
+        test_string_1 = f'"{backslash}t{backslash}{backslash}n"'  # r"\t\\n"
+        test_string_2 = f'"a{backslash}tb"'                       # r"a\tb"
+        test_string_3 = f'"{backslash}{backslash}{backslash}n"'   # r"\\\n"
+        T, F = True, False  # these make the test cases format nicely
+        for test_parameters in (
+                # Parameters are the arguments to creating a QuotedString
+                # and the expected parsed list of characters):
+                # - unquote_results
+                # - convert_whitespace_escapes
+                # - test string
+                # - expected parsed characters (broken out as separate
+                #   list items (all those doubled backslashes make it
+                #   difficult to interpret the output)
+                (T, T, test_string_0, [backslash, "n"]),
+                (T, F, test_string_0, [backslash, "n"]),
+                (F, F, test_string_0, ['"', backslash, backslash, "n", '"']),
+                (T, T, test_string_1, [tab, backslash, "n"]),
+                (T, F, test_string_1, ["t", backslash, "n"]),
+                (F, F, test_string_1, ['"', backslash, "t", backslash, backslash, "n", '"']),
+                (T, T, test_string_2, ["a", tab, "b"]),
+                (T, F, test_string_2, ["a", "t", "b"]),
+                (F, F, test_string_2, ['"', "a", backslash, "t", "b", '"']),
+                (T, T, test_string_3, [backslash, newline]),
+                (T, F, test_string_3, [backslash, "n"]),
+                (F, F, test_string_3, ['"', backslash, backslash, backslash, "n", '"']),
+        ):
+            unquote_results, convert_ws_escapes, test_string, expected_list = test_parameters
+            test_description = f"Testing with parameters {test_parameters}"
+            with self.subTest(msg=test_description):
+                print(test_description)
+                print(f"unquote_results: {unquote_results}"
+                      f"\nconvert_whitespace_escapes: {convert_ws_escapes}")
+                qs_expr = pp.QuotedString(
+                        quoteChar='"',
+                        escChar='\\',
+                        unquote_results=unquote_results,
+                        convert_whitespace_escapes=convert_ws_escapes
+                    )
+                result = qs_expr.parse_string(test_string)
+
+                # do this instead of assertParserAndCheckList to explicitly
+                # check and display the separate items in the list
+                print("Results:")
+                control_chars = {newline: "<NEWLINE>", backslash: "<BACKSLASH>", tab: "<TAB>"}
+                print(f"[{', '.join(control_chars.get(c, repr(c)) for c in result[0])}]")
+                self.assertEqual(expected_list, list(result[0]))
+
+                print()
+        #fmt: on
+
     def testCaselessOneOf(self):
         caseless1 = pp.oneOf("d a b c aA B A C", caseless=True)
         caseless1str = str(caseless1)
@@ -1691,6 +1748,23 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             ["start", "red ", "+", "456 ", "end"],
             {"_skipped": ["red ", "456 "]},
         )
+
+    def testSkipToPreParseIgnoreExprs(self):
+        # added to verify fix to Issue #475
+        from pyparsing import Word, alphanums, python_style_comment
+
+        some_grammar = Word(alphanums) + ":=" + ... + ';'
+        some_grammar.ignore(python_style_comment)
+        try:
+            result = some_grammar.parse_string("""\
+                var1 := 2 # 3; <== this semi-colon will match!
+                      + 1;
+                """, parse_all=True)
+        except ParseException as pe:
+            print(pe.explain())
+            raise
+        else:
+            print(result.dump())
 
     def testEllipsisRepetition(self):
 
@@ -2736,6 +2810,65 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertEqual("", result.B)
         with self.assertRaises(AttributeError):
             result.__xyz__
+
+    def testParseResultsNamedResultWithEmptyString(self):
+        # from Issue #470
+
+        # Check which values can be returned from a parse action
+        for test_value, expected_in_result_by_name in [
+            ("x", True),
+            ("", True),
+            (True, True),
+            (False, True),
+            (1, True),
+            (0, True),
+            (None, True),
+            (b"", True),
+            (b"a", True),
+            ([], False),
+            ((), False),
+        ]:
+            msg = (f"value = {test_value!r},"
+                   f" expected X {'not ' if not expected_in_result_by_name else ''}in result")
+            with self.subTest(msg):
+                print(msg)
+                grammar = ((pp.Suppress("a") + pp.ZeroOrMore("x"))
+                           .add_parse_action(lambda p: test_value)
+                           .set_results_name("X"))
+                result = grammar.parse_string("a")
+                print(result.dump())
+                if expected_in_result_by_name:
+                    self.assertIn("X", result, f"Expected X not found for parse action value {test_value!r}")
+                    print(repr(result["X"]))
+                else:
+                    self.assertNotIn("X", result, f"Unexpected X found for parse action value {test_value!r}")
+                    with self.assertRaises(KeyError):
+                        print(repr(result["X"]))
+                print()
+
+        # Do not add a parse result.
+        msg = "value = <no parse action defined>, expected X in result"
+        with self.subTest(msg):
+            print(msg)
+            grammar = (pp.Suppress("a") + pp.ZeroOrMore("x")).set_results_name("X")
+            result = grammar.parse_string("a")
+            print(result.dump())
+            self.assertIn("X", result, f"Expected X not found with no parse action")
+            print()
+
+        # Test by directly creating a ParseResults
+        print("Create empty string value directly")
+        result = pp.ParseResults("", name="X")
+        print(result.dump())
+        self.assertIn("X", result, "failed to construct ParseResults with named value using empty string")
+        print(repr(result["X"]))
+        print()
+
+        print("Create empty string value from a dict")
+        result = pp.ParseResults.from_dict({"X": ""})
+        print(result.dump())
+        self.assertIn("X", result, "failed to construct ParseResults with named value using from_dict")
+        print(repr(result["X"]))
 
     def testMatchOnlyAtCol(self):
         """successfully use matchOnlyAtCol helper function"""
@@ -6514,6 +6647,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             "path": parts.path,
             "query": parts.query,
             "fragment": parts.fragment,
+            "url": sample_url,
         }
 
         self.assertParseAndCheckDict(ppc.url, sample_url, expected, verbose=True)
