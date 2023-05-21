@@ -13,17 +13,26 @@ help from Devin J. Pohly in structuring the code to enable this peaceful transit
 Version 3.2.0 will also discontinue support for Python versions 3.6 and 3.7.
 
 
-Version 3.1.0b2 - (in development)
-----------------------------------
+Version 3.1.0b2 - May, 2023
+---------------------------
 - Updated `create_diagram()` code to be compatible with railroad-diagrams package
   version 3.0. Fixes Issue #477 (railroad diagrams generated with black bars),
   reported by Sam Morley-Short.
+
+- Fixed bug in `NotAny`, where parse actions on the negated expr were not being run.
+  This could cause `NotAny` to incorrectly fail if the expr would normally match,
+  but would fail to match if a condition used as a parse action returned False.
+  Fixes Issue #482, raised by byaka, thank you!
 
 - Fixed `create_diagram()` to accept keyword args, to be passed through to the
   `template.render()` method to generate the output HTML (PR submitted by Aussie Schnore,
   good catch!)
 
 - Fixed bug in `python_quoted_string` regex.
+
+- Added `examples/bf.py` Brainf*ck parser/executor example. Illustrates using
+  a pyparsing grammar to parse language syntax, and attach executable AST nodes to
+  the parsed results.
 
 
 Version 3.1.0b1 - April, 2023
