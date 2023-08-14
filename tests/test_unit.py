@@ -1804,6 +1804,15 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         else:
             print(result.dump())
 
+    def testSkipToIgnoreExpr2(self):
+        a, star = pp.Literal.using_each("a*")
+        wrapper = a + ... + a
+        expr = star + pp.SkipTo(star, ignore=wrapper) + star
+
+        # pyparsing 3.0.9 -> ['*', 'a_*_a', '*']
+        # pyparsing 3.1.0 -> ['*', '', '*']
+        self.assertParseAndCheckList(expr, "*a_*_a*", ["*", "a_*_a", "*"])
+
     def testEllipsisRepetition(self):
         word = pp.Word(pp.alphas).setName("word")
         num = pp.Word(pp.nums).setName("num")
@@ -3447,6 +3456,17 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseResultsEquals(
             result1, expected, msg="issue with ParseResults.extend(ParseResults)"
         )
+
+    def testQuotedStringLoc(self):
+        expr = pp.QuotedString("'")
+        expr.add_parse_action(lambda t: t[0].upper())
+
+        test_string = "Using 'quotes' for 'sarcasm' or 'emphasis' is not good 'style'."
+        transformed = expr.transform_string(test_string)
+        print(test_string)
+        print(transformed)
+        expected = re.sub(r"'([^']+)'", lambda match: match[1].upper(), test_string)
+        self.assertEqual(expected, transformed)
 
     def testParseResultsWithNestedNames(self):
         from pyparsing import (
@@ -5208,6 +5228,76 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                     expr + pp.restOfLine.suppress(),
                     "A1234567890",
                     ["A1234567890"[:exarg]],
+                )
+
+    def testWordMin(self):
+        # failing tests
+        for min_val in range(3, 5):
+            with self.subTest(min_val=min_val):
+                wd = pp.Word("a", "1", min=min_val)
+                print(min_val, wd.reString)
+                with self.assertRaisesParseException():
+                    wd.parse_string("a1")
+
+        for min_val in range(2, 5):
+            with self.subTest(min_val=min_val):
+                wd = pp.Word("a", min=min_val)
+                print(min_val, wd.reString)
+                with self.assertRaisesParseException():
+                    wd.parse_string("a")
+
+        for min_val in range(3, 5):
+            with self.subTest(min_val=min_val):
+                wd = pp.Word("a", "1", min=min_val)
+                print(min_val, wd.reString)
+                with self.assertRaisesParseException():
+                    wd.parse_string("a1")
+
+        # passing tests
+        for min_val in range(2, 5):
+            with self.subTest(min_val=min_val):
+                wd = pp.Word("a", min=min_val)
+                test_string = "a" * min_val
+                self.assertParseAndCheckList(
+                    wd,
+                    test_string,
+                    [test_string],
+                    msg=f"Word(min={min_val}) failed",
+                    verbose=True,
+                )
+
+        for min_val in range(2, 5):
+            with self.subTest(min_val=min_val):
+                wd = pp.Word("a", "1", min=min_val)
+                test_string = "a" + "1" * (min_val - 1)
+                self.assertParseAndCheckList(
+                    wd,
+                    test_string,
+                    [test_string],
+                    msg=f"Word(min={min_val}) failed",
+                    verbose=True,
+                )
+
+    def testWordExact(self):
+        # failing tests
+        for exact_val in range(2, 5):
+            with self.subTest(exact_val=exact_val):
+                wd = pp.Word("a", exact=exact_val)
+                print(exact_val, wd.reString)
+                with self.assertRaisesParseException():
+                    wd.parse_string("a")
+
+        # passing tests
+        for exact_val in range(2, 5):
+            with self.subTest(exact_val=exact_val):
+                wd = pp.Word("a", exact=exact_val)
+                test_string = "a" * exact_val
+                self.assertParseAndCheckList(
+                    wd,
+                    test_string,
+                    [test_string],
+                    msg=f"Word(exact={exact_val}) failed",
+                    verbose=True,
                 )
 
     def testInvalidMinMaxArgs(self):
@@ -9897,6 +9987,46 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 msg=f"unexpected exception line ({exception_line!r})",
             )
 
+    def testForwardReferenceException(self):
+        token = pp.Forward()
+        num = pp.Word(pp.nums)
+        num.setName("num")
+        text = pp.Word(pp.alphas)
+        text.setName("text")
+        fail = pp.Regex(r"\\[A-Za-z]*")("name")
+
+        def parse_fail(s, loc, toks):
+            raise pp.ParseFatalException(s, loc, f"Unknown symbol: {toks['name']}")
+
+        fail.set_parse_action(parse_fail)
+        token <<= num | text | fail
+
+        # If no name is given, do not intercept error messages
+        with self.assertRaises(pp.ParseFatalException, msg="Unknown symbol: \\fail"):
+            token.parse_string("\\fail")
+
+        # If name is given, do intercept error messages
+        token.set_name("token")
+        with self.assertRaises(pp.ParseFatalException, msg="Expected token, found.*"):
+            token.parse_string("\\fail")
+
+    def testForwardExceptionText(self):
+        wd = pp.Word(pp.alphas)
+
+        ff = pp.Forward().set_name("fffff!")
+        ff <<= wd + pp.Opt(ff)
+
+        with self.assertRaises(pp.ParseFatalException, msg="no numbers!"):
+            try:
+                ff.parse_string("123")
+            except pp.ParseException as pe:
+                raise pp.ParseSyntaxException("no numbers! just alphas!") from pe
+
+        with self.assertRaises(pp.ParseException, msg="Expected W:(A-Za-z)"):
+            ff2 = pp.Forward()
+            ff2 <<= wd
+            ff2.parse_string("123")
+
     def testMiscellaneousExceptionBits(self):
         pp.ParserElement.verbose_stacktrace = True
 
@@ -9980,6 +10110,26 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             expr = cls([])
             expr.streamline()
             to_railroad(expr)
+
+    def testForwardsDoProperStreamlining(self):
+        wd = pp.Word(pp.alphas)
+        w3 = wd + wd + wd
+        # before streamlining, w3 is {{W:(A-Za-z) W:(A-Za-z)} W:(A-Za-z)}
+        self.assertIsInstance(w3.exprs[0], pp.And)
+        self.assertEqual(len(w3.exprs), 2)
+
+        ff = pp.Forward()
+        ff <<= w3 + pp.Opt(ff)
+        # before streamlining, ff is {{{W:(A-Za-z) W:(A-Za-z)} W:(A-Za-z)} [Forward: None]}
+        self.assertEqual(len(ff.expr.exprs), 2)
+
+        ff.streamline()
+
+        # after streamlining:
+        #   w3 is {W:(A-Za-z) W:(A-Za-z) W:(A-Za-z)}
+        #   ff is {W:(A-Za-z) W:(A-Za-z) W:(A-Za-z) [Forward: None]}
+        self.assertEqual(len(ff.expr.exprs), 4)
+        self.assertEqual(len(w3.exprs), 3)
 
 
 class Test03_EnablePackratParsing(TestCase):

@@ -12,6 +12,22 @@ help from Devin J. Pohly in structuring the code to enable this peaceful transit
 
 Version 3.2.0 will also discontinue support for Python versions 3.6 and 3.7.
 
+
+Version 3.1.1 - July, 2023
+--------------------------
+- Fixed regression in Word(min), reported by Ricardo Coccioli, good catch! (Issue #502)
+
+- Fixed bug in bad exception messages raised by Forward expressions. PR submitted
+  by Kyle Sunden, thanks for your patience and collaboration on this (#493).
+
+- Fixed regression in SkipTo, where ignored expressions were not checked when looking
+  for the target expression. Reported by catcombo, Issue #500.
+
+- Fixed type annotation for enable_packrat, PR submitted by Mike Urbach, thanks! (Issue #498)
+
+- Some general internal code cleanup. (Instigated by Michal Čihař, Issue #488)
+
+
 Version 3.1.0 - June, 2023
 --------------------------
 - Added `tag_emitter.py` to examples. This example demonstrates how to insert
