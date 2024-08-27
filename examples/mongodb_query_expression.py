@@ -40,8 +40,11 @@ def key_phrase(expr: Union[str, pp.ParserElement]) -> pp.ParserElement:
     return pp.Combine(expr, adjacent=False, join_string=" ")
 
 
-ident = ppc.identifier()
 integer = ppc.integer()
+ident = pp.Combine(
+    ppc.identifier
+    + ("." + (ppc.identifier() | integer))[...]
+)
 num = ppc.number()
 LBRACK, RBRACK = pp.Suppress.using_each("[]")
 
@@ -49,12 +52,13 @@ operand = ident | (pp.QuotedString('"') | pp.QuotedString("'")).set_name("quoted
 operand.set_name("operand")
 operand_list = pp.Group(LBRACK + pp.DelimitedList(operand) + RBRACK, aslist=True)
 
-AND, OR, NOT, IN, CONTAINS, ALL, NONE = pp.CaselessKeyword.using_each(
-    "and or not in contains all none".split()
+AND, OR, NOT, IN, CONTAINS, ALL, ANY, NONE, LIKE = pp.CaselessKeyword.using_each(
+    "and or not in contains all any none like".split()
 )
 NOT_IN = key_phrase(NOT + IN)
 CONTAINS_ALL = key_phrase(CONTAINS + ALL)
 CONTAINS_NONE = key_phrase(CONTAINS + NONE)
+CONTAINS_ANY = key_phrase(CONTAINS + ANY)
 
 
 def binary_eq_neq(s, l, tokens):
@@ -79,16 +83,10 @@ def binary_comparison_op(s, l, tokens):
         "<=": "$lte",
         ">=": "$gte",
         "!=": "$ne",
-        "in": "$in",
-        "not in": "$nin",
-        "contains all": "$all",
         # add Unicode operators, because we can
         "≤": "$lte",
         "≥": "$gte",
         "≠": "$ne",
-        "⊇": "$all",
-        "∈": "$in",
-        "∉": "$nin",
     }
     inequality_inv_map = {
         "<": "$gt",
@@ -134,15 +132,67 @@ def binary_comparison_op(s, l, tokens):
             f"{tokens[1]!r} comparison operator may not be chained with more than 2 terms"
         )
 
+    return {field: {binary_map[op]: value}}
+
+
+def binary_array_comparison_op(s, l, tokens):
+    tokens = tokens[0]
+    binary_map = {
+        "in": "$in",
+        "not in": "$nin",
+        "contains": "$in",
+        "contains all": "$all",
+        # add Unicode operators, because we can
+        "⊇": "$all",
+        "∈": "$in",
+        "∉": "$nin",
+    }
+
+    try:
+        field, op, value = tokens
+    except ValueError:
+        raise InvalidExpressionException(
+            s, l,
+            f"{tokens[1]!r} operator may not be chained with more than 2 terms"
+        )
+
     if op == "contains none":
         return {
-            "$nor": [
-                {field: {"$elemMatch": {"$eq": v}}}
-                for v in value
-            ]
+            field: { "$nin": list(set(value))}
         }
 
-    return {field: {binary_map[op]: value}}
+    if op == "contains any":
+        return {
+            field: { "$in": list(set(value))}
+        }
+
+    if op == "contains":
+        return {field: {binary_map[op]: [value]}}
+
+    return {field: {binary_map[op]: list(set(value))}}
+
+
+def regex_comparison_op(s, l, tokens):
+    tokens = tokens[0]
+    try:
+        field, op, value = tokens
+    except ValueError:
+        raise InvalidExpressionException(s, l, f"{tokens[1]!r} operations may not be chained")
+
+    if value in ("", ".*"):
+        return {field: {"$exists": True}}
+
+    if value[:1] == "%":
+        re_string = value[1:]
+    else:
+        re_string = f"^{value}"
+
+    if re_string[-1:] == "%":
+        re_string = re_string[:-1]
+    else:
+        re_string += "$"
+
+    return {field: {"$regex": re_string}}
 
 
 def binary_multi_op(tokens):
@@ -150,7 +200,6 @@ def binary_multi_op(tokens):
     oper_map = {
         "and": "$and",
         "or": "$or",
-        "not": "$not",
     }
     op = oper_map[tokens[1]]
     values = tokens[::2]
@@ -170,7 +219,7 @@ def binary_multi_op(tokens):
             # compatibility for pre-Python 3.9 versions
             ret = {}
             for v in values:
-                ret = {**ret, **v}
+                ret.update(v)
         return ret
 
     return {op: values}
@@ -179,24 +228,30 @@ def binary_multi_op(tokens):
 def unary_op(tokens):
     tokens = tokens[0]
     oper_map = {
-        "not": "$not",
+        "not": "$nor",
     }
     op, value = tokens
 
     # detect 'not not'
     k, v = next(iter(value.items()))
-    if k == "$not":
+    if k == "$nor":
         return v
 
-    return {oper_map[op]: value}
+    return {oper_map[op]: [value]}
 
 
 comparison_expr = pp.infix_notation(
     operand | operand_list,
     [
         (pp.one_of("<= >= < > ≤ ≥"), 2, pp.OpAssoc.LEFT, binary_comparison_op),
+        (LIKE | "~=", 2, pp.OpAssoc.LEFT, regex_comparison_op),
         (pp.one_of("= == != ≠"), 2, pp.OpAssoc.LEFT, binary_eq_neq),
-        (IN | NOT_IN | CONTAINS_ALL | CONTAINS_NONE | pp.one_of("⊇ ∈ ∉"), 2, pp.OpAssoc.LEFT, binary_comparison_op),
+        (
+            IN | NOT_IN | CONTAINS_ALL | CONTAINS_NONE | CONTAINS_ANY | CONTAINS | pp.one_of("⊇ ∈ ∉"),
+            2,
+            pp.OpAssoc.LEFT,
+            binary_array_comparison_op
+        ),
     ]
 )
 
@@ -222,7 +277,7 @@ query_condition_expr_with_comment.add_parse_action(
 
 
 def transform_query(query_string: str, include_comment: bool = False) -> Dict:
-    """
+    r"""
     Parse a query string using boolean and arithmetic comparison operations,
     and convert it to a dict for the expression equivalent using MongoDB query
     expression structure.
@@ -241,6 +296,13 @@ def transform_query(query_string: str, include_comment: bool = False) -> Dict:
         {'name': {'$in': ['Alice', 'Bob']}}
 
     Also supported:
+    - embedded and array references
+        a.b < 100
+        {'a.b': {'$lt': 100}}
+
+        a.0 < 100
+        {'a.0': {'$lt': 100}}
+
     - chained inequalities
         100 < a < 200
         {'$and': [{'a': {'$gt': 100}}, {'a': {'$lt': 200}}]}
@@ -249,9 +311,28 @@ def transform_query(query_string: str, include_comment: bool = False) -> Dict:
         name in ["Alice", "Bob"]
         {'name': {'$in': ['Alice', 'Bob']}}
 
-    - `contains all`
+    - `contains [any | all | None]`
+        names contains "Alice"
+        {'names': {'$in': ['Alice']}}
+
+        names contains any ["Alice", "Bob"]
+        {'names': {'$in': ['Alice', 'Bob']}}
+
         names contains all ["Alice", "Bob"]
         {'names': {'$all': ['Alice', 'Bob']}}
+
+        names contains none ["Alice", "Bob"]
+        {'names': {'$nin': ['Alice', 'Bob']}}
+
+    - regex matches
+        a ~= "ABC%"
+        {'a': {'$regex': '^ABC.*'}}
+
+        a ~= "%ABC"
+        {'a': {'$regex': '.*ABC$'}}
+
+        a ~= "ABC\d+"
+        {'a': {'$regex': '^ABC\\d+$'}}
 
     - Unicode operators
         100 < a ≤ 200 and 300 > b ≥ 200 or c ≠ -1
@@ -266,7 +347,7 @@ def transform_query(query_string: str, include_comment: bool = False) -> Dict:
         if include_comment
         else query_condition_expr
     )
-    return generator_expr.parse_string(query_string)[0]
+    return generator_expr.parse_string(query_string, parse_all=True)[0]
 
 
 def main():
@@ -290,9 +371,11 @@ def main():
         100 < a ≤ 200 or 300 > b ≥ 200 or c ≠ -1
         100 < a ≤ 200 ∧ 300 > b ≥ 200 ∧ c ≠ -1
         100 < a ≤ 200 ∨ 300 > b ≥ 200 ∨ c ≠ -1
-        a==100 and not not (a > 100)
-        a==100 and not not not (a > 100)
-        a==100 and not not not not (a > 100)
+        a==100 and b > 100
+        a==100 and not (b > 100)
+        a==100 and not not (b > 100)
+        a==100 and not not not (b > 100)
+        a==100 and not not not not (b > 100)
         name in ["Alice", "Bob"]
         name ∈ ["Alice", "Bob"]
         name not in ["Alice", "Bob"]
@@ -300,7 +383,15 @@ def main():
         names contains all ["Alice", "Bob"]
         names ⊇ ["Alice", "Bob"]
         names contains none ["Alice", "Bob"]
-    """).splitlines():
+        names contains any ["Alice", "Bob"]
+        names contains "Alice"
+        a.b > 1000
+        a.0 == "Alice"
+        a.0.b > 1000
+        name ~= "%Al"
+        name ~= "Al%"
+        name ~= "%Al%"
+    """).splitlines() + [r'name ~= "Al\d+"']:
         print(test)
         print(transform_query(test))
         print()
