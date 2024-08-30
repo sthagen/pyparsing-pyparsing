@@ -5,7 +5,7 @@ import types
 import collections
 import itertools
 from functools import lru_cache, wraps
-from typing import Callable, List, Union, Iterable, TypeVar, cast
+from typing import Callable, Union, Iterable, TypeVar, cast
 
 _bslash = chr(92)
 C = TypeVar("C", bound=Callable)
@@ -14,8 +14,8 @@ C = TypeVar("C", bound=Callable)
 class __config_flags:
     """Internal class for defining compatibility and debugging flags"""
 
-    _all_names: List[str] = []
-    _fixed_names: List[str] = []
+    _all_names: list[str] = []
+    _fixed_names: list[str] = []
     _type_desc = "configuration"
 
     @classmethod
@@ -100,27 +100,24 @@ class _UnboundedCache:
 
 class _FifoCache:
     def __init__(self, size):
-        self.not_in_cache = not_in_cache = object()
         cache = {}
-        keyring = [object()] * size
+        self.size = size
+        self.not_in_cache = not_in_cache = object()
         cache_get = cache.get
         cache_pop = cache.pop
-        keyiter = itertools.cycle(range(size))
 
         def get(_, key):
             return cache_get(key, not_in_cache)
 
         def set_(_, key, value):
             cache[key] = value
-            i = next(keyiter)
-            cache_pop(keyring[i], None)
-            keyring[i] = key
+            while len(cache) > size:
+                # pop oldest element in cache by getting the first key
+                cache_pop(next(iter(cache)))
 
         def clear(_):
             cache.clear()
-            keyring[:] = [object()] * size
 
-        self.size = size
         self.get = types.MethodType(get, self)
         self.set = types.MethodType(set_, self)
         self.clear = types.MethodType(clear, self)

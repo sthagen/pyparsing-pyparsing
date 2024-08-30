@@ -2,15 +2,37 @@
 Change Log
 ==========
 
-NOTE: In the future release 3.2.0, use of many of the pre-PEP8 methods (such as
-`ParserElement.parseString`) will start to raise `DeprecationWarnings`. 3.2.0 should
-get released some time later in 2024. I currently plan to completely
-drop the pre-PEP8 methods in pyparsing 4.0, though we won't see that release until
-at least late 2024 if not 2025. So there is plenty of time to convert existing parsers to
-the new function names before the old functions are completely removed. (Big
-help from Devin J. Pohly in structuring the code to enable this peaceful transition.)
+RELEASE PLANNING NOTES:
 
-Version 3.2.0 will also discontinue support for Python versions 3.6 and 3.7.
+In the pyparsing release 3.3.0, use of many of the pre-PEP8 methods (such as
+`ParserElement.parseString`) will start to raise `DeprecationWarnings`. I plan to
+completely drop the pre-PEP8 methods in pyparsing 4.0, though we won't see that release
+until some time in 2025. So there is plenty of time to convert existing parsers to
+the new function names before the old functions are completely removed. (Big help from
+Devin J. Pohly in structuring the code to enable this peaceful transition.)
+
+
+Version 3.2.0 - in development
+------------------------------
+- Discontinued support for Python 3.6, 3.7, and 3.8. Reworked portions of the
+  packrat cache to leverage insertion-preserving ordering in dicts.
+
+- Added `lox_parser.py` example, a parser for the Lox language used as a tutorial in
+  Robert Nystrom's "Crafting Interpreters" (http://craftinginterpreters.com/)
+
+- Added `complex_chemical_formulas.py` example, to add parsing capability for
+  formulas such as "3(C₆H₅OH)₂".
+
+- Added query syntax to `mongodb_query_expression.py` with better support for
+  array fields ("contains", "contains all", "contains any", and "contains none");
+  and "like" and "not like" operators to support SQL "%" wildcard matching and "=~"
+  operator to support regex matching.
+
+- Added `indent` and `base_1` arguments to `pyparsing.testing.with_line_numbers`. When
+  using `with_line_numbers` inside a parse action, set `base_1`=False, since the
+  reported `loc` value is 0-based. `indent` can be a leading string (typically of
+  spaces or tabs) to indent the numbered string passed to `with_line_numbers`.
+  Added while working on #557, reported by Bernd Wechner.
 
 
 Version 3.1.4 - August, 2024
