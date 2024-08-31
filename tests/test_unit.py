@@ -2236,10 +2236,8 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         ).set_name("AB")
         self.assertEqual("AB", ab.name)
         self.assertEqual("AB", str(ab))
-        try:
+        with self.assertRaisesParseException(expected_msg="Expected AB"):
             ab.parse_string("C")
-        except ParseException as pe:
-            self.assertTrue(str(pe).startswith("Expected AB"))
 
     def testHTMLEntities(self):
         html_source = dedent(
@@ -7738,11 +7736,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         """
         Test behavior of ParserElement.setBreak(), to invoke the debugger before parsing that element is attempted.
 
-        Temporarily monkeypatches pdb.set_trace.
+        Temporarily monkeypatches sys.breakpointhook().
         """
         was_called = False
 
-        def mock_set_trace():
+        def mock_set_trace(*args, **kwargs):
             nonlocal was_called
             was_called = True
 
@@ -7750,13 +7748,13 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         wd.setBreak()
 
         print("Before parsing with setBreak:", was_called)
-        import pdb
 
         with ppt.reset_pyparsing_context():
-            pdb.set_trace = mock_set_trace
+            sys.breakpointhook = mock_set_trace
             wd.parseString("ABC", parseAll=True)
 
         print("After parsing with setBreak:", was_called)
+        sys.breakpointhook = sys.__breakpointhook__
         self.assertTrue(was_called, "set_trace wasn't called by setBreak")
 
     def testUnicodeTests(self):
@@ -10397,6 +10395,37 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 with self.assertRaisesParseException(expected_msg=expected_msg):
                     expr.parse_string(input_str)
 
+    def test_exception_messages_with_exception_subclass(self):
+        class TooManyRepsException(pp.ParseFatalException):
+            pass
+
+        @pp.trace_parse_action
+        def no_more_than_3(t):
+            if len(t) > 3:
+                raise TooManyRepsException(f"{len(t)} is too many, only 3 allowed")
+
+        # parse an int followed by no more than 3 words
+        parser = (
+            pp.Word(pp.nums)
+            + pp.Group(
+                pp.Word(pp.alphas)[...].add_parse_action(no_more_than_3)
+            )
+        )
+
+        # should succeed
+        result = parser.parse_string("1000 abc def ghi")
+        print(result.dump())
+
+        # should raise exception with local exception message
+        with self.assertRaisesParseException(
+                exc_type=ParseFatalException,
+                expected_msg="4 is too many, only 3 allowed",
+                msg="wrong exception message"
+        ) as pe_context:
+            result = parser.parse_string("2000 abc def ghi jkl")
+
+        print(pe_context.exception)
+
     def test_pep8_synonyms(self):
         """
         Test that staticmethods wrapped by replaced_by_pep8 wrapper are properly
@@ -10428,8 +10457,11 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         run_subtest("inlineLiteralsUsing", args="pp.Suppress")
 
         run_subtest(
-            "setDefaultKeywordChars", expr="pp.Keyword('START')", args="'abcde'"
+            "setDefaultKeywordChars",
+            expr="pp.Keyword('START')",
+            args="'abcde'"
         )
+        pass
 
 
 class Test03_EnablePackratParsing(TestCase):
