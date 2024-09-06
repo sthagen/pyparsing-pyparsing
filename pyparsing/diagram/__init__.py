@@ -1,4 +1,6 @@
 # mypy: ignore-errors
+from __future__ import annotations
+
 import railroad
 import pyparsing
 import dataclasses
@@ -106,7 +108,7 @@ class EditablePartial(Generic[T]):
         self.kwargs = kwargs
 
     @classmethod
-    def from_call(cls, func: Callable[..., T], *args, **kwargs) -> "EditablePartial[T]":
+    def from_call(cls, func: Callable[..., T], *args, **kwargs) -> EditablePartial[T]:
         """
         If you call this function in the same way that you would call the constructor, it will store the arguments
         as you expect. For example EditablePartial.from_call(Fraction, 1, 3)() == Fraction(1, 3)
@@ -156,7 +158,7 @@ def railroad_to_html(diagrams: list[NamedDiagram], embed=False, **kwargs) -> str
     return template.render(diagrams=data, embed=embed, **kwargs)
 
 
-def resolve_partial(partial: "EditablePartial[T]") -> T:
+def resolve_partial(partial: EditablePartial[T]) -> T:
     """
     Recursively resolves a collection of Partials into whatever type they are
     """
@@ -265,7 +267,7 @@ class ElementState:
     complete: bool = False
 
     def mark_for_extraction(
-        self, el_id: int, state: "ConverterState", name: str = None, force: bool = False
+        self, el_id: int, state: ConverterState, name: str = None, force: bool = False
     ):
         """
         Called when this instance has been seen twice, and thus should eventually be extracted into a sub-diagram
@@ -501,7 +503,7 @@ def _to_diagram_element(
 
     # If the element isn't worth extracting, we always treat it as the first time we say it
     if _worth_extracting(element):
-        if el_id in lookup:
+        if el_id in lookup and lookup[el_id].name is not None:
             # If we've seen this element exactly once before, we are only just now finding out that it's a duplicate,
             # so we have to extract it into a new diagram.
             looked_up = lookup[el_id]
