@@ -21,6 +21,9 @@ Version 3.2.0 - in development
   - Reworked portions of the packrat cache to leverage insertion-preserving ordering
     in dicts.
   - Changed `pdb.set_trace()` call in `ParserElement.set_break()` to `breakpoint()`.
+  - Converted `typing.NamedTuple` to `dataclasses.dataclass` in railroad diagramming
+    code.
+  - Added `from __future__ import annotations` to clean up some type annotations.
 
 - POSSIBLE BREAKING CHANGE: Fixed code in `ParseElementEnhance` subclasses that
   replaced detailed exception messages raised in contained expressions with a
@@ -29,12 +32,16 @@ Version 3.2.0 - in development
   If your code has conditional logic based on the message content in raised
   `ParseExceptions`, this bugfix may break your code.
 
+- Fixed the displayed output of `Regex` terms to deduplicate repeated backslashes,
+  for easier reading in debugging, printing, and railroad diagrams.
+
 - Fixed (or at least reduced) elusive bug when generating railroad diagrams,
   where some diagram elements were just empty blocks. Fix submitted by RoDuth,
   thanks a ton!
 
 - Added `lox_parser.py` example, a parser for the Lox language used as a tutorial in
-  Robert Nystrom's "Crafting Interpreters" (http://craftinginterpreters.com/)
+  Robert Nystrom's "Crafting Interpreters" (http://craftinginterpreters.com/).
+  With helpful corrections from RoDuth.
 
 - Added `complex_chemical_formulas.py` example, to add parsing capability for
   formulas such as "3(C₆H₅OH)₂".
@@ -42,8 +49,9 @@ Version 3.2.0 - in development
 - Added query syntax to `mongodb_query_expression.py` with better support for
   array fields ("contains", "contains all", "contains any", and "contains none");
   and "like" and "not like" operators to support SQL "%" wildcard matching and "=~"
-  operator to support regex matching. Also added support for dates and datetimes
-  as query values.
+  operator to support regex matching. Also:
+  - added support for dates and datetimes as query values
+  - added support for `a[0]` style array referencing
 
 - Added `indent` and `base_1` arguments to `pyparsing.testing.with_line_numbers`. When
   using `with_line_numbers` inside a parse action, set `base_1`=False, since the

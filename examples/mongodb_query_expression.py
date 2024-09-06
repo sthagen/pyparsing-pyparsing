@@ -43,20 +43,22 @@ def key_phrase(expr: Union[str, pp.ParserElement]) -> pp.ParserElement:
 LBRACK, RBRACK = pp.Suppress.using_each("[]")
 
 integer = ppc.integer()
+array_ref = LBRACK + integer + RBRACK
+array_ref.add_parse_action(lambda t: f".{t[0]}")
 ident = pp.Combine(
     ppc.identifier
-    + ("." + (ppc.identifier() | integer))[...]
+    + ("." + (ppc.identifier() | integer) | array_ref)[...]
 )
 num = ppc.number()
 
 date = pp.Regex(r"\d{4}(/|-)\d{2}(\1)\d{2}")
-date_time = pp.Regex(r"\d{4}(/|-)\d{2}(\1)\d{2} \d{2}:\d{2}(:\d{2})?")
+date_time = pp.Regex(r"\d{4}(/|-)\d{2}(\1)\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?")
 date.add_parse_action(lambda t: datetime.fromisoformat(t[0].replace("/", "-")))
 date_time.add_parse_action(lambda t: datetime.fromisoformat(t[0].replace("/", "-")))
 
 operand = ident | (pp.QuotedString('"') | pp.QuotedString("'")).set_name("quoted_string") | date_time | date | num
 operand.set_name("operand")
-operand_list = pp.Group(LBRACK + pp.DelimitedList(operand) + RBRACK, aslist=True)
+operand_list = pp.Group(LBRACK + pp.Optional(pp.DelimitedList(operand)) + RBRACK, aslist=True)
 
 AND, OR, NOT, IN, CONTAINS, ALL, ANY, NONE, LIKE = pp.CaselessKeyword.using_each(
     "and or not in contains all any none like".split()
@@ -206,7 +208,12 @@ def regex_comparison_op(s, l, tokens):
 
     # convert "%" to ".*" and "%%" to "%"
     DBL_PCT = "\x80"
-    re_string = xform(value).replace('%%', DBL_PCT).replace('%', '.*').replace(DBL_PCT, '%')
+    re_string = (
+        xform(value)
+        .replace('%%', DBL_PCT)
+        .replace('%', '.*')
+        .replace(DBL_PCT, '%')
+    )
 
     if op == "like":
         return {field: {"$regex": re_string}}
@@ -270,13 +277,21 @@ def unary_op(tokens):
 
 
 comparison_expr = pp.infix_notation(
-    operand | operand_list,
+    (operand | operand_list).set_name("comparison_operand"),
     [
         (pp.one_of("<= >= < > ≤ ≥"), 2, pp.OpAssoc.LEFT, binary_comparison_op),
         (LIKE | NOT_LIKE | "=~", 2, pp.OpAssoc.LEFT, regex_comparison_op),
         (pp.one_of("= == != ≠"), 2, pp.OpAssoc.LEFT, binary_eq_neq),
         (
-            IN | NOT_IN | CONTAINS_ALL | CONTAINS_NONE | CONTAINS_ANY | CONTAINS | pp.one_of("⊇ ∈ ∉"),
+            (
+                IN
+                | NOT_IN
+                | CONTAINS_ALL
+                | CONTAINS_NONE
+                | CONTAINS_ANY
+                | CONTAINS
+                | pp.one_of("⊇ ∈ ∉")
+            ),
             2,
             pp.OpAssoc.LEFT,
             binary_array_comparison_op
@@ -290,7 +305,7 @@ AND_OP = AND | pp.Literal("∧").add_parse_action(pp.replace_with("and"))
 OR_OP = OR | pp.Literal("∨").add_parse_action(pp.replace_with("or"))
 
 query_condition_expr = pp.infix_notation(
-    comparison_expr | ident,
+    (comparison_expr | ident).set_name("query_operand"),
     [
         (NOT_OP, 1, pp.OpAssoc.RIGHT, unary_op),
         (AND_OP, 2, pp.OpAssoc.LEFT, binary_multi_op),
@@ -303,6 +318,8 @@ query_condition_expr_with_comment = pp.And([query_condition_expr])
 query_condition_expr_with_comment.add_parse_action(
     lambda s, l, t: t[0].__setitem__("$comment", s)
 )
+
+pp.autoname_elements()
 
 
 def transform_query(query_string: str, include_comment: bool = False) -> Dict:
@@ -332,16 +349,19 @@ def transform_query(query_string: str, include_comment: bool = False) -> Dict:
         a.0 < 100
         {'a.0': {'$lt': 100}}
 
+        a[0] < 100
+        {'a.0': {'$lt': 100}}
+
     - chained inequalities
         100 < a < 200
         {'$and': [{'a': {'$gt': 100}}, {'a': {'$lt': 200}}]}
 
     - dates and datetimes
       (dates are in YYYY/MM/DD format, and may use '/' or '-' separators)
-      (times may be HH:MM or HH:MM:SS format)
+      (times may be HH:MM, HH:MM:SS, or HH:MM:SS.SSS format)
         dob = 1935-01-08
         motm = 1969/07/20 10:56
-        y2k = 2000/01/01 00:00:00
+        y2k = 2000/01/01 00:00:00.000
 
     - `in` and `not in`
         name in ["Alice", "Bob"]
@@ -393,12 +413,12 @@ def transform_query(query_string: str, include_comment: bool = False) -> Dict:
         names ⊇ ["Alice", "Bob"]
 
     """
-    generator_expr = (
+    transformer_expr = (
         query_condition_expr_with_comment
         if include_comment
         else query_condition_expr
     )
-    return generator_expr.parse_string(query_string, parse_all=True)[0]
+    return transformer_expr.parse_string(query_string, parse_all=True)[0]
 
 
 def main():
@@ -439,7 +459,9 @@ def main():
         names contains "Alice"
         a.b > 1000
         a.0 == "Alice"
+        a[0] == "Alice"
         a.0.b > 1000
+        a[0].b == "Alice"
         name like "%Al"
         name like "Al%"
         name like "%Al%"
@@ -453,10 +475,11 @@ def main():
         name =~ "Al"
         name =~ "A+"
         a = 100 and a = 100
-        y2k = 2000/01/01 00:00:00
+        y2k_day = 2000/01/01
+        y2k_sec = 2000/01/01 00:00:00
+        y2k_msec = 2000/01/01 00:00:00.000
         motm = 1969/07/20 10:56
         1946 <= birth_year <= 1964
-        1946 <= birth_year <= 1964 and state = "OH"
         1946-01-01 <= dob <= 1964-12-31
         # redundant equality conditions get collapsed
         a = 100 and a = 100
@@ -474,4 +497,5 @@ def main():
 
 
 if __name__ == '__main__':
+    query_condition_expr.create_diagram("mongodb_query_expression.html")
     main()
