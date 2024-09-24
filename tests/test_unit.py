@@ -54,19 +54,23 @@ def flatten(nested_list):
 
 
 class resetting:
-    def __init__(self, *args):
-        ob = args[0]
-        attrnames = args[1:]
+    def __init__(self, ob, attrname: str, *attrnames):
         self.ob = ob
-        self.save_attrs = attrnames
-        self.save_values = [getattr(ob, attrname) for attrname in attrnames]
+        self.unset_attr = object()
+        self.save_attrs = [attrname, *attrnames]
+        self.save_values = [
+            getattr(ob, name, self.unset_attr) for name in self.save_attrs
+        ]
 
     def __enter__(self):
         pass
 
     def __exit__(self, *args):
         for attr, value in zip(self.save_attrs, self.save_values):
-            setattr(self.ob, attr, value)
+            if value is not self.unset_attr:
+                setattr(self.ob, attr, value)
+            else:
+                delattr(self.ob, attr)
 
 
 def find_all_re_matches(patt, s):
@@ -344,6 +348,90 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 result,
                 "Failed whitespace skipping with NotAny and MatchFirst/Or",
             )
+
+    def testCuneiformTransformString(self):
+
+        class Cuneiform(pp.unicode_set):
+            """Unicode set for Cuneiform Character Range"""
+
+            _ranges: list[tuple[int, ...]] = [
+                (0x10380, 0x103d5),
+                (0x12000, 0x123FF),
+                (0x12400, 0x1247F),
+            ]
+
+        # define a MINIMAL Python parser
+        LPAR, RPAR, COLON, EQ = map(pp.Suppress, "():=")
+        def_ = pp.Keyword("𒁴𒈫", ident_chars=Cuneiform.identbodychars).set_name("def")
+        any_keyword = def_
+        ident = (~any_keyword) + pp.Word(
+            Cuneiform.identchars, Cuneiform.identbodychars, asKeyword=True
+        )
+        str_expr = pp.infix_notation(
+            pp.QuotedString('"') | pp.common.integer,
+            [
+                ("*", 2, pp.OpAssoc.LEFT),
+                ("+", 2, pp.OpAssoc.LEFT),
+            ],
+        )
+
+        rvalue = pp.Forward()
+        fn_call = (ident + pp.Group(LPAR + pp.Optional(rvalue) + RPAR)).set_name("fn_call")
+
+        rvalue <<= fn_call | ident | str_expr | pp.common.number
+        assignment_stmt = ident + EQ + rvalue
+
+        stmt = pp.Group(fn_call | assignment_stmt).set_name("stmt")
+
+        fn_def = pp.Group(
+            def_ + ident + pp.Group(LPAR + pp.Optional(rvalue) + RPAR) + COLON
+        ).set_name("fn_def")
+        fn_body = pp.IndentedBlock(stmt).set_name("fn_body")
+        fn_expr = pp.Group(fn_def + pp.Group(fn_body))
+
+        script = fn_expr[...] + stmt[...]
+
+        # parse some Python written in Cuneiform
+        cuneiform_hello_world = dedent(r"""
+        𒁴𒈫 𒀄𒂖𒆷𒁎():
+            𒀁 = "𒀄𒂖𒆷𒁎, 𒍟𒁎𒉿𒆷𒀳!\n" * 3
+            𒄑𒉿𒅔𒋫(𒀁)
+
+        𒀄𒂖𒆷𒁎()
+        """)
+
+        # use transform_string to convert keywords and builtins to runnable Python
+        names_map = {
+            "𒄑𒉿𒅔𒋫": "print",
+        }
+        ident.add_parse_action(lambda t: names_map.get(t[0], t[0]))
+        def_.add_parse_action(lambda: "def")
+
+        print("\nconvert Cuneiform Python to executable Python")
+        transformed = (
+            # always put ident last
+            (def_ | ident)
+            .ignore(pp.quoted_string)
+            .transform_string(cuneiform_hello_world)
+        )
+
+        expected = dedent(r"""
+        def 𒀄𒂖𒆷𒁎():
+            𒀁 = "𒀄𒂖𒆷𒁎, 𒍟𒁎𒉿𒆷𒀳!\n" * 3
+            print(𒀁)
+
+        𒀄𒂖𒆷𒁎()
+        """)
+
+        print(
+            "=================\n"
+            + cuneiform_hello_world  # .strip()
+            + "\n=================\n"
+            + transformed
+            + "\n=================\n"
+        )
+
+        self.assertEqual(expected, transformed)
 
     def testUpdateDefaultWhitespace(self):
         prev_default_whitespace_chars = pp.ParserElement.DEFAULT_WHITE_CHARS
@@ -3669,6 +3757,32 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             result,
             "ParseResults with empty list but containing a results name evaluated as False",
         )
+
+    def testParseResultsWithAsListWithAndWithoutFlattening(self):
+        ppc = pp.common
+
+        # define a recursive grammar so we can easily build nested ParseResults
+        LPAR, RPAR = pp.Suppress.using_each("()")
+        fn_call = pp.Forward()
+        fn_arg = fn_call | ppc.identifier | ppc.number
+        fn_call <<= ppc.identifier + pp.Group(LPAR + pp.Optional(pp.DelimitedList(fn_arg)) + RPAR)
+
+        tests = [
+            ("random()", ["random", []]),
+            ("sin(theta)", ["sin", ["theta"]]),
+            ("sin(rad(30))", ["sin", ["rad", [30]]]),
+            ("sin(rad(30), rad(60, 180))", ["sin", ["rad", [30], "rad", [60, 180]]]),
+            ("sin(rad(30), rad(60, 180), alpha)", ["sin", ["rad", [30], "rad", [60, 180], "alpha"]]),
+        ]
+        for test_string, expected in tests:
+            with self.subTest():
+                print(test_string)
+                observed = fn_call.parse_string(test_string, parse_all=True)
+                print(observed.as_list())
+                self.assertEqual(expected, observed.as_list())
+                print(observed.as_list(flatten=True))
+                self.assertEqual(flatten(expected), observed.as_list(flatten=True))
+                print()
 
     def testParseResultsCopy(self):
         expr = (
@@ -10180,6 +10294,23 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 exception_line.startswith("TypeError:"),
                 msg=f"unexpected exception line ({exception_line!r})",
             )
+
+    def testExceptionMessageCustomization(self):
+        with resetting(pp.ParseBaseException, "formatted_message"):
+            def custom_exception_message(exc) -> str:
+                found_phrase = f", found {exc.found}" if exc.found else ""
+                return f"{exc.lineno}:{exc.column} {exc.msg}{found_phrase}"
+
+            pp.ParseBaseException.formatted_message = custom_exception_message
+
+            try:
+                pp.Word(pp.nums).parse_string("ABC")
+            except ParseException as pe:
+                pe_msg = str(pe)
+            else:
+                pe_msg = ""
+
+            self.assertEqual("1:1 Expected W:(0-9), found 'ABC'", pe_msg)
 
     def testForwardReferenceException(self):
         token = pp.Forward()

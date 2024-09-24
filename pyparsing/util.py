@@ -2,9 +2,9 @@
 import inspect
 import warnings
 import types
-import collections
 import itertools
 from functools import lru_cache, wraps
+from operator import itemgetter
 from typing import Callable, Union, Iterable, TypeVar, cast
 
 _bslash = chr(92)
@@ -184,6 +184,14 @@ def _escape_regex_range_chars(s: str) -> str:
 def _collapse_string_to_ranges(
     s: Union[str, Iterable[str]], re_escape: bool = True
 ) -> str:
+
+    # Developer notes:
+    # - Do not optimize this code assuming that the given input string
+    #   or internal lists will be short (such as in loading generators into
+    #   lists to make it easier to find the last element); this method is also
+    #   used to generate regex ranges for character sets in the pyparsing.unicode
+    #   classes, and these can be _very_ long strings
+
     def is_consecutive(c):
         c_int = ord(c)
         is_consecutive.prev, prev = c_int, is_consecutive.prev
@@ -239,6 +247,56 @@ def _flatten(ll: Iterable) -> list:
         else:
             ret.append(i)
     return ret
+
+
+def make_compressed_re(
+    word_list: Iterable[str], max_level: int = 2, _level: int = 1
+) -> str:
+    """
+    Create a regular expression string from a list of words, collapsing by common
+    prefixes and optional suffixes.
+
+    Calls itself recursively to build nested sublists for each group of suffixes
+    that have a shared prefix.
+    """
+
+    def get_suffixes_from_common_prefixes(namelist: list[str]):
+        if len(namelist) > 1:
+            for prefix, suffixes in itertools.groupby(namelist, key=lambda s: s[:1]):
+                yield prefix, sorted([s[1:] for s in suffixes], key=len, reverse=True)
+        else:
+            yield namelist[0][0], [namelist[0][1:]]
+
+    ret = []
+    first = True
+    for initial, suffixes in get_suffixes_from_common_prefixes(sorted(word_list)):
+        if not first:
+            ret.append("|")
+        first = False
+
+        trailing = ""
+        if '' in suffixes:
+            trailing = "?"
+            suffixes.remove('')
+
+        if len(suffixes) > 1:
+            if all(len(s) == 1 for s in suffixes):
+                ret.append(f"{initial}[{''.join(suffixes)}]{trailing}")
+            else:
+                if _level < max_level:
+                    suffix_re = make_compressed_re(sorted(suffixes), max_level, _level + 1)
+                    ret.append(f"{initial}({suffix_re}){trailing}")
+                else:
+                    ret.append(f"{initial}({'|'.join(suffixes)}){trailing}")
+        else:
+            if suffixes:
+                if len(suffixes[0]) > 1 and trailing:
+                    ret.append(f"{initial}({suffixes[0]}){trailing}")
+                else:
+                    ret.append(f"{initial}{suffixes[0]}{trailing}")
+            else:
+                ret.append(initial)
+    return "".join(ret)
 
 
 def replaced_by_pep8(compat_name: str, fn: C) -> C:

@@ -1203,6 +1203,7 @@ class ParserElement(ABC):
         instring: str,
         max_matches: int = _MAX_INT,
         overlap: bool = False,
+        always_skip_whitespace=True,
         *,
         debug: bool = False,
         maxMatches: int = _MAX_INT,
@@ -1247,7 +1248,13 @@ class ParserElement(ABC):
             instring = str(instring).expandtabs()
         instrlen = len(instring)
         loc = 0
-        preparseFn = self.preParse
+        if always_skip_whitespace:
+            preparser = Empty()
+            preparser.ignoreExprs = self.ignoreExprs
+            preparser.whiteChars = self.whiteChars
+            preparseFn = preparser.preParse
+        else:
+            preparseFn = self.preParse
         parseFn = self._parse
         ParserElement.resetCache()
         matches = 0
@@ -1316,7 +1323,8 @@ class ParserElement(ABC):
         self.keepTabs = True
         try:
             for t, s, e in self.scan_string(instring, debug=debug):
-                out.append(instring[lastE:s])
+                if s > lastE:
+                    out.append(instring[lastE:s])
                 lastE = e
 
                 if not t:
@@ -1370,7 +1378,12 @@ class ParserElement(ABC):
         maxMatches = min(maxMatches, max_matches)
         try:
             return ParseResults(
-                [t for t, s, e in self.scan_string(instring, maxMatches, debug=debug)]
+                [
+                    t
+                    for t, s, e in self.scan_string(
+                        instring, maxMatches, always_skip_whitespace=False, debug=debug
+                    )
+                ]
             )
         except ParseBaseException as exc:
             if ParserElement.verbose_stacktrace:
@@ -3038,18 +3051,24 @@ class Regex(Token):
 
             self._re = None
             self.reString = self.pattern = pattern
-            self.flags = flags
 
         elif hasattr(pattern, "pattern") and hasattr(pattern, "match"):
             self._re = pattern
             self.pattern = self.reString = pattern.pattern
-            self.flags = flags
+
+        elif callable(pattern):
+            # defer creating this pattern until we really need it
+            self.pattern = pattern
+            self._re = None
 
         else:
             raise TypeError(
-                "Regex may only be constructed with a string or a compiled RE object"
+                "Regex may only be constructed with a string or a compiled RE object,"
+                " or a callable that takes no arguments and returns a string or a"
+                " compiled RE object"
             )
 
+        self.flags = flags
         self.errmsg = f"Expected {self.name}"
         self.mayIndexError = False
         self.asGroupList = asGroupList
@@ -3064,8 +3083,19 @@ class Regex(Token):
         if self._re:
             return self._re
 
+        if callable(self.pattern):
+            # replace self.pattern with the string returned by calling self.pattern()
+            self.pattern = cast(Callable[[], str], self.pattern)()
+
+            # see if we got a compiled RE back instead of a str - if so, we're done
+            if hasattr(self.pattern, "pattern") and hasattr(self.pattern, "match"):
+                self._re = cast(re.Pattern[str], self.pattern)
+                self.pattern = self.reString = self._re.pattern
+                return self._re
+
         try:
-            return re.compile(self.pattern, self.flags)
+            self._re = re.compile(self.pattern, self.flags)
+            return self._re
         except re.error:
             raise ValueError(f"invalid pattern ({self.pattern!r}) passed to Regex")
 
@@ -3942,7 +3972,7 @@ class ParseExpression(ParserElement):
 
 class And(ParseExpression):
     """
-    Requires all given :class:`ParseExpression` s to be found in the given order.
+    Requires all given :class:`ParserElement` s to be found in the given order.
     Expressions may be separated by whitespace.
     May be constructed using the ``'+'`` operator.
     May also be constructed using the ``'-'`` operator, which will
@@ -4103,7 +4133,7 @@ class And(ParseExpression):
 
 
 class Or(ParseExpression):
-    """Requires that at least one :class:`ParseExpression` is found. If
+    """Requires that at least one :class:`ParserElement` is found. If
     two expressions match, the expression that matches the longest
     string will be used. May be constructed using the ``'^'``
     operator.
@@ -4258,7 +4288,7 @@ class Or(ParseExpression):
 
 
 class MatchFirst(ParseExpression):
-    """Requires that at least one :class:`ParseExpression` is found. If
+    """Requires that at least one :class:`ParserElement` is found. If
     more than one expression matches, the first one listed is the one that will
     match. May be constructed using the ``'|'`` operator.
 
@@ -4365,7 +4395,7 @@ class MatchFirst(ParseExpression):
 
 
 class Each(ParseExpression):
-    """Requires all given :class:`ParseExpression` s to be found, but in
+    """Requires all given :class:`ParserElement` s to be found, but in
     any order. Expressions may be separated by whitespace.
 
     May be constructed using the ``'&'`` operator.
@@ -5677,7 +5707,7 @@ class Forward(ParseElementEnhance):
 
 class TokenConverter(ParseElementEnhance):
     """
-    Abstract subclass of :class:`ParseExpression`, for converting parsed results.
+    Abstract subclass of :class:`ParseElementEnhance`, for converting parsed results.
     """
 
     def __init__(self, expr: Union[ParserElement, str], savelist=False):
