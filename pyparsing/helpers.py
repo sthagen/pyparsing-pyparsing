@@ -780,19 +780,19 @@ def infix_notation(
     _FB.__name__ = "FollowedBy>"
 
     ret = Forward()
+    ret.set_name(f"{base_expr.name}_expression")
     if isinstance(lpar, str):
         lpar = Suppress(lpar)
     if isinstance(rpar, str):
         rpar = Suppress(rpar)
 
+    nested_expr = (lpar + ret + rpar).set_name(f"nested_{base_expr.name}")
+
     # if lpar and rpar are not suppressed, wrap in group
     if not (isinstance(lpar, Suppress) and isinstance(rpar, Suppress)):
-        lastExpr = base_expr | Group(lpar + ret + rpar).set_name(
-            f"nested_{base_expr.name}"
-        )
+        lastExpr = base_expr | Group(nested_expr)
     else:
-        lastExpr = base_expr | (lpar + ret + rpar).set_name(f"nested_{base_expr.name}")
-    root_expr = lastExpr
+        lastExpr = base_expr | nested_expr
 
     arity: int
     rightLeftAssoc: opAssoc
@@ -812,9 +812,9 @@ def infix_notation(
                     "if numterms=3, opExpr must be a tuple or list of two expressions"
                 )
             opExpr1, opExpr2 = opExpr
-            term_name = f"{opExpr1}{opExpr2} term"
+            term_name = f"{opExpr1}{opExpr2} operations"
         else:
-            term_name = f"{opExpr} term"
+            term_name = f"{opExpr} operations"
 
         if not 1 <= arity <= 3:
             raise ValueError("operator must be unary (1), binary (2), or ternary (3)")
@@ -832,15 +832,17 @@ def infix_notation(
             elif arity == 2:
                 if opExpr is not None:
                     match_lookahead = _FB(lastExpr + opExpr + lastExpr)
-                    matchExpr = Group(
-                        lastExpr + (opExpr + lastExpr)[1, ...]
-                    )
+                    matchExpr = Group(lastExpr + (opExpr + lastExpr)[1, ...])
                 else:
                     match_lookahead = _FB(lastExpr + lastExpr)
                     matchExpr = Group(lastExpr[2, ...])
             elif arity == 3:
-                match_lookahead = _FB(lastExpr + opExpr1 + lastExpr + opExpr2 + lastExpr)
-                matchExpr = Group(lastExpr + (opExpr1 + lastExpr + opExpr2 + lastExpr)[1, ...])
+                match_lookahead = _FB(
+                    lastExpr + opExpr1 + lastExpr + opExpr2 + lastExpr
+                )
+                matchExpr = Group(
+                    lastExpr + (opExpr1 + lastExpr + opExpr2 + lastExpr)[1, ...]
+                )
         elif rightLeftAssoc is OpAssoc.RIGHT:
             if arity == 1:
                 # try to avoid LR with this extra test
@@ -851,14 +853,10 @@ def infix_notation(
             elif arity == 2:
                 if opExpr is not None:
                     match_lookahead = _FB(lastExpr + opExpr + thisExpr)
-                    matchExpr = Group(
-                        lastExpr + (opExpr + thisExpr)[1, ...]
-                    )
+                    matchExpr = Group(lastExpr + (opExpr + thisExpr)[1, ...])
                 else:
                     match_lookahead = _FB(lastExpr + thisExpr)
-                    matchExpr = Group(
-                        lastExpr + thisExpr[1, ...]
-                    )
+                    matchExpr = Group(lastExpr + thisExpr[1, ...])
             elif arity == 3:
                 match_lookahead = _FB(
                     lastExpr + opExpr1 + thisExpr + opExpr2 + thisExpr
@@ -882,7 +880,6 @@ def infix_notation(
         lastExpr = thisExpr
 
     ret <<= lastExpr
-    root_expr.set_name("base_expr")
     return ret
 
 
@@ -1031,9 +1028,7 @@ def indentedBlock(blockStatementExpr, indentStack, indent=True, backup_stacks=[]
 
 # it's easy to get these comment structures wrong - they're very common,
 # so may as well make them available
-c_style_comment = Regex(r"/\*(?:[^*]|\*(?!/))*\*\/").set_name(
-    "C style comment"
-)
+c_style_comment = Regex(r"/\*(?:[^*]|\*(?!/))*\*\/").set_name("C style comment")
 "Comment of the form ``/* ... */``"
 
 html_comment = Regex(r"<!--[\s\S]*?-->").set_name("HTML comment")
