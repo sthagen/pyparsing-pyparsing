@@ -14,8 +14,16 @@ Devin J. Pohly in structuring the code to enable this peaceful transition.)
 
 Version 3.2.2 - under development
 ---------------------------------
+- Fixed bug in `nested_expr` where nested contents were stripped of whitespace when
+  the default whitespace characters were cleared (raised in this StackOverflow
+  question https://stackoverflow.com/questions/79327649 by Ben Alan). Also addressed
+  bug in resolving PEP8 compliant argument name and legacy argument name.
+
 - Better exception message for `MatchFirst` and `Or` expressions, showing all alternatives
   rather than just the first one. Fixes Issue #592, reported by Focke, thanks!
+
+- Added return type annotation of "-> None" for all `__init__()` methods, to satisfy
+  `mypy --strict` type checking. PR submitted by FeRD, thank you!
 
 - Added optional argument `show_hidden` to create_diagram` to show
   elements that are used internally by pyparsing, but are not part of the actual

@@ -5361,6 +5361,47 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             msg="using different openers and closers shouldn't affect resulting ParseResults",
         )
 
+    def testNestedExpressions3(self):
+
+        prior_ws_chars = pp.ParserElement.DEFAULT_WHITE_CHARS
+        with ppt.reset_pyparsing_context():
+            pp.ParserElement.set_default_whitespace_chars('')
+
+            input_str = dedent(
+                """\
+                selector
+                {
+                  a:b;
+                  c:d;
+                  selector
+                  {
+                    a:b;
+                    c:d;
+                  }
+                  y:z;
+                }"""
+            )
+
+            print(ppt.with_line_numbers(input_str, 1, 100))
+
+            nested_result = pp.nested_expr('{', '}').parse_string("{" + input_str + "}").asList()
+            expected_result = [
+                [
+                    'selector\n',
+                    [
+                        '\n  a:b;\n  c:d;\n  selector\n  ',
+                        [
+                            '\n    a:b;\n    c:d;\n  '
+                        ],
+                        '\n  y:z;\n'
+                    ]
+                ]
+            ]
+            self.assertEqual(nested_result, expected_result)
+
+        # make sure things have been put back properly
+        self.assertEqual(pp.ParserElement.DEFAULT_WHITE_CHARS, prior_ws_chars)
+
     def testWordMinMaxArgs(self):
         parsers = [
             "A" + pp.Word(pp.nums),
