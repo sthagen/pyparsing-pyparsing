@@ -2978,6 +2978,11 @@ class Word(Token):
                 self.re_match = self.re.match
                 self.parseImpl = self.parseImpl_regex  # type: ignore[method-assign]
 
+    def copy(self) -> Word:
+        ret: Word = cast(Word, super().copy())
+        ret.parseImpl = ret.parseImpl_regex  # type: ignore[method-assign]
+        return ret
+
     def _generateDefaultName(self) -> str:
         def charsAsStr(s):
             max_repr_len = 16
@@ -3145,6 +3150,14 @@ class Regex(Token):
             self.parseImpl = self.parseImplAsGroupList  # type: ignore [method-assign]
         if self.asMatch:
             self.parseImpl = self.parseImplAsMatch  # type: ignore [method-assign]
+
+    def copy(self):
+        ret: Regex = cast(Regex, super().copy())
+        if self.asGroupList:
+            ret.parseImpl = ret.parseImplAsGroupList
+        if self.asMatch:
+            ret.parseImpl = ret.parseImplAsMatch
+        return ret
 
     @cached_property
     def re(self) -> re.Pattern:
