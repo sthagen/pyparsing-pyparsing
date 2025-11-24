@@ -67,7 +67,7 @@ expr = pp.Forward().set_name("expr")
 term = pp.Forward().set_name("term")
 statement = pp.Forward().set_name("statement")
 stmt_seq = pp.Forward().set_name("stmt_seq")
-condition_stmt = pp.Forward().set_name("condition_stmt")
+bool_expr = pp.Forward().set_name("condition_stmt")
 
 # Function call: name '(' [Identifier (',' Identifier)*] ')'
 function_call = pp.Group(
@@ -108,7 +108,7 @@ rel_expr = pp.infix_notation(
 )
 
 # Condition statement with boolean operators
-condition_stmt <<= pp.infix_notation(
+bool_expr <<= pp.infix_notation(
     rel_expr,
     [
         (andop, 2, pp.OpAssoc.LEFT),
@@ -117,7 +117,8 @@ condition_stmt <<= pp.infix_notation(
 )
 
 # Expression may be string, number, term/equation, or function call
-expr <<= rel_expr
+expr <<= bool_expr
+
 
 # Datatypes
 Datatype = pp.MatchFirst([INT, FLOAT, STRING]).set_name("Datatype")
@@ -137,41 +138,41 @@ Assignment_Statement = pp.Group(
     pp.Tag("type", "assign_stmt")
     + Identifier("target")
     + ASSIGN
-    + expr("value")
+    - expr("value")
     + SEMI
 ).set_name("Assignment_Statement")
 
 # Read/Write
 Read_Statement = pp.Group(
-    pp.Tag("type", "read_stmt") + READ.suppress() + Identifier("var") + SEMI
+    pp.Tag("type", "read_stmt") + READ.suppress() - Identifier("var") + SEMI
 ).set_name("Read_Statement")
 Write_Statement = pp.Group(
     pp.Tag("type", "write_stmt")
     + WRITE.suppress()
-    + (ENDL.copy().set_parse_action(lambda: "endl") | expr("expr"))
+    - (ENDL.copy().set_parse_action(lambda: "endl") | expr("expr"))
     + SEMI
 ).set_name("Write_Statement")
 
 # Return
 Return_Statement = pp.Group(
-    pp.Tag("type", "return_stmt") + RETURN.suppress() + expr("expr") + SEMI
+    pp.Tag("type", "return_stmt") + RETURN.suppress() - expr("expr") + SEMI
 ).set_name("Return_Statement")
 
 # If / ElseIf / Else
 If_Statement = pp.Group(
     pp.Tag("type", "if_stmt")
     + IF.suppress()
-    + condition_stmt("cond")
+    + bool_expr("cond")
     + THEN.suppress()
-    + pp.Group(stmt_seq)("then")
+    - pp.Group(stmt_seq)("then")
     + pp.ZeroOrMore(
         pp.Group(
             ELSEIF.suppress()
-            + condition_stmt("cond")
+            - bool_expr("cond")
             + THEN.suppress()
             + pp.Group(stmt_seq)("then"))
     )("elseif")
-    + pp.Optional(ELSE.suppress() + pp.Group(stmt_seq)("else"))
+    + pp.Optional(ELSE.suppress() - pp.Group(stmt_seq)("else"))
     + END.suppress()
 ).set_name("If_Statement")
 
@@ -179,9 +180,9 @@ If_Statement = pp.Group(
 Repeat_Statement = pp.Group(
     pp.Tag("type", "repeat_stmt")
     + REPEAT.suppress()
-    + stmt_seq("body")
+    - stmt_seq("body")
     + UNTIL.suppress()
-    + condition_stmt("cond")
+    + bool_expr("cond")
 ).set_name("Repeat_Statement")
 
 # Statement list and statement choices
@@ -211,15 +212,20 @@ stmt_seq <<= stmt_list("stmts")
 
 # Parameters and functions
 Parameter = pp.Group(Datatype("type") + Identifier("name"))
-Param_List = pp.Optional(pp.Group(pp.DelimitedList(Parameter, COMMA)))
+Param_List = pp.Group(pp.DelimitedList(Parameter, COMMA))
 Function_Declaration = pp.Group(
-    pp.Tag("type", "func_decl") +
-    Datatype("return_type") + FunctionName("name") + LPAREN + Param_List("parameters") + RPAREN
+    Datatype("return_type")
+    + FunctionName("name")
+    + LPAREN + pp.Optional(Param_List, default=[])("parameters") + RPAREN
 ).set_name("Function_Declaration")
 Function_Body = pp.Group(
     LBRACE + stmt_seq("stmts") + RBRACE
 ).set_name("Function_Body")
-Function_Definition = pp.Group(Function_Declaration("decl") + Function_Body("body")).set_name("Function_Definition")
+Function_Definition = pp.Group(
+    pp.Tag("type", "func_decl")
+    + Function_Declaration("decl")
+    + Function_Body("body")
+).set_name("Function_Definition")
 
 Main_Function = pp.Group(
     pp.Tag("type", "main_decl") +
@@ -263,6 +269,8 @@ def _mini_tests() -> None:
 
         # Repeat until
         repeat x := x - 1; write x; until x = 0
+        
+        write x > 2 && x < 10;
     """
     stmt_list.run_tests(statement_tests, parse_all=True, full_dump=False)
 

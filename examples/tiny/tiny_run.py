@@ -5,10 +5,6 @@ This module currently provides:
 - main(): CLI entry point that reads a .tiny source file, parses it using the
   TINY grammar, and prepares for conversion to TinyNode-based AST.
 
-Note: Subclasses of TinyNode for concrete statement types are intentionally
-not implemented yet. The conversion logic is scaffolded and will activate once
-those subclasses are added, using each subclass's `statement_type` marker.
-
 Usage:
     python -m examples.tiny.tiny_run path/to/program.tiny [--dump]
 """
@@ -22,25 +18,6 @@ import pyparsing as pp
 from .tiny_parser import parse_tiny
 from .tiny_ast import TinyNode
 from .tiny_engine import TinyEngine
-
-
-
-
-def _build_nodes(parsed: pp.ParseResults):
-    """Scaffold for converting ParseResults to TinyNode instances.
-
-    Since concrete TinyNode subclasses are not implemented yet, this function
-    currently returns the original ParseResults. Once subclasses are added,
-    this function will detect `type` tags on statement groups and instantiate
-    the appropriate TinyNode subclass via `TinyNode.from_statement_type`.
-    """
-    # Minimal activation: wrap known statement groups into TinyNode subclasses
-    if isinstance(parsed, pp.ParseResults) and "type" in parsed:
-        node_cls = TinyNode.from_statement_type(parsed["type"])  # type: ignore[index]
-        if node_cls is not None:
-            return node_cls(parsed)
-        # Fall through if no subclass yet
-    return parsed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -73,14 +50,45 @@ def main(argv: list[str] | None = None) -> int:
     # Build nodes where applicable and register top-level items
     program = parsed.program
 
-    # Register all top-level function definitions (store raw definitions for now)
+    initialize_engine(engine, program)
+
+    # Execute scripts "main" function
+    main_node = engine.get_function("main")
+
+    try:
+        main_node.execute(engine)
+    finally:
+        if sys.exc_info()[0] is not None:
+            return 1
+        return 0
+
+
+def initialize_engine(engine: TinyEngine, program: ParseResults | str | Any) -> TinyNode:
+    # Register all top-level function definitions: build function nodes and signatures
     if "functions" in program:
         for fdef in program.functions:
             try:
-                fname = fdef.decl.name
+                decl = fdef.decl
+                fname = decl.name
+                return_type = decl.return_type or "int"
+                params_group = decl.parameters
+                param_list = list(params_group[0]) if params_group else []
+                params: list[tuple[str, str]] = []
+                for p in param_list:
+                    ptype = p.type or "int"
+                    pname = p.name
+                    params.append((ptype, pname))
             except Exception:
+                # Skip malformed definitions
                 continue
-            engine.register_function(fname, fdef)
+
+            # Build a function node with a prebuilt body
+            fn_node_class = TinyNode.from_statement_type(fdef.type)
+            fn_node = fn_node_class.from_parsed(fdef)
+
+            # Register signature and node for runtime use
+            engine.register_function_signature(fname, return_type, params)
+            engine.register_function(fname, fn_node)
 
     # Register any top-level globals if they exist (grammar may not provide these)
     if "globals" in program:
@@ -99,14 +107,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # Build AST node for main() and register it as a function
     main_group = program.main
-    main_node = _build_nodes(main_group)
+    main_node_class = TinyNode.from_statement_type(main_group["type"])
+    main_node = main_node_class.from_parsed(main_group)
     engine.register_function("main", main_node)
 
-    # Execute main if it is a TinyNode with an execute() method
-    if isinstance(main_node, TinyNode):
-        _ = main_node.execute(engine)
-
-    return 0
+    return main_node
 
 
 if __name__ == "__main__":

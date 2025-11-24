@@ -11,8 +11,22 @@ frame being the last element.
 from __future__ import annotations
 
 import pyparsing as pp
-from .tiny_ast import TinyNode, ReturnStmtNode
+from .tiny_ast import TinyNode, ReturnStmtNode, ReturnPropagate
 
+import operator
+
+_op_map = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
+    "=": operator.eq,
+    "<>": operator.ne,
+    "<": operator.lt,
+    ">": operator.gt,
+    "<=": operator.le,
+    ">=": operator.ge,
+}
 
 class TinyFrame:
     """A single stack frame holding local variables and their types.
@@ -61,13 +75,16 @@ class TinyEngine:
     Notes:
     - Types supported: int, float, string. Numeric operations promote to float when needed.
     - Boolean context: 0 or empty string is False; anything else is True.
-    - Function calls (`func_call`) are recognized but not implemented yet.
     """
 
     def __init__(self) -> None:
         # Dedicated program-level globals and function registry
         self._globals: TinyFrame = TinyFrame()
-        self._functions: dict[str, object] = {}
+        self._functions: dict[str, TinyNode] = {}
+
+        # Function signatures: name -> (return_type, [(ptype, pname), ...])
+        # Used when functions are registered as AST nodes to bind parameters
+        self._function_sigs: dict[str, tuple[str, list[tuple[str, str]]]] = {}
 
         # Stack of frames (last is current); empty until main/function entry
         self._frames: list[TinyFrame] = []
@@ -75,17 +92,20 @@ class TinyEngine:
         self._out: list[str] = []
 
     # ----- Program-level registry (globals/functions) -----
-    def register_function(self, name: str, fn: object) -> None:
+    def register_function(self, name: str, fn: TinyNode) -> None:
         """Register a program-level function definition by name.
-
-        The concrete callable/object shape is intentionally unspecified for now;
-        later, this may point to a node representing a function body or a Python
-        callable adapter.
         """
         self._functions[name] = fn
 
-    def get_function(self, name: str) -> object | None:
+    def get_function(self, name: str) -> TinyNode | None:
         return self._functions.get(name)
+
+    def register_function_signature(self, name: str, return_type: str, params: list[tuple[str, str]]) -> None:
+        """Register or update a function's signature metadata.
+
+        params: list of (ptype, pname)
+        """
+        self._function_sigs[name] = (return_type, params)
 
     # ----- Frame management -----
     @property
@@ -123,9 +143,6 @@ class TinyEngine:
 
     def _writeln(self) -> None:
         self._out.append("\n")
-
-    def _read_token(self) -> str | None:
-        return self._in.pop(0) if self._in else None
 
     # ----- Variables API -----
     def declare_var(self, name: str, dtype: str, init_value: object | None = None) -> None:
@@ -166,8 +183,8 @@ class TinyEngine:
             value = self.eval_expr(value)  # type: ignore[arg-type]
 
         # Find the nearest frame containing the variable; fall back to globals; otherwise declare local
-        frame = self._find_frame_for_var(name)
-        if frame is not None:
+        frame = self.current_frame
+        if name in frame:
             dtype = frame.get_type(name)
             frame.set(name, self._coerce(value, dtype))
             return
@@ -180,20 +197,12 @@ class TinyEngine:
         self.declare_var(name, inferred, value)
 
     def get_var(self, name: str) -> object:
-        frame = self._find_frame_for_var(name)
-        if frame is not None:
+        frame = self.current_frame
+        if name in frame:
             return frame.get(name)
         if name in self._globals:
             return self._globals.get(name)
         raise NameError(f"Variable not declared: {name}")
-
-    def _find_frame_for_var(self, name: str) -> TinyFrame | None:
-        for fr in reversed(self._frames):
-            if name in fr:
-                return fr
-        if name in self._globals:
-            return self._globals
-        return None
 
     # ----- Expression Evaluation -----
     def eval_expr(self, expr: object) -> object:
@@ -207,8 +216,8 @@ class TinyEngine:
         if isinstance(expr, (int, float, str)):
             # Identifier lookup: if a bare string matches a var name, read its value
             if isinstance(expr, str):
-                fr = self._find_frame_for_var(expr)
-                if fr is not None:
+                fr = self.current_frame
+                if expr in fr:
                     return fr.get(expr)
                 if expr in self._globals:
                     return self._globals.get(expr)
@@ -218,7 +227,7 @@ class TinyEngine:
         if isinstance(expr, pp.ParseResults):
             # Function call group
             if "type" in expr and expr["type"] == "func_call":  # type: ignore[index]
-                name = expr["name"]
+                name = expr.name
                 arg_values = [self.eval_expr(arg) for arg in (expr.get("args", []) or [])]
                 return self.call_function(name, arg_values)
 
@@ -254,17 +263,6 @@ class TinyEngine:
         return expr
 
     # ----- Functions API (execution helper to share with CallStmtNode) -----
-    def _build_stmt_node(self, stmt_group: pp.ParseResults) -> TinyNode | None:
-        """Convert a statement ParseResults group into a TinyNode instance, if supported."""
-        try:
-            stype = stmt_group["type"]
-        except Exception:
-            return None
-        node_cls = TinyNode.from_statement_type(stype)  # type: ignore[arg-type]
-        if node_cls is None:
-            return None
-        return node_cls(stmt_group)
-
     def call_function(self, name: str, args: list[object]) -> object | None:
         """Call a user-defined function by name with already-evaluated arguments.
 
@@ -275,55 +273,20 @@ class TinyEngine:
         if fn is None:
             raise NameError(f"Undefined function: {name}")
 
-        # If a TinyNode was registered (e.g., main as a node), execute it directly.
-        if isinstance(fn, TinyNode):
-            return fn.execute(self)
+        if name not in self._function_sigs:
+            raise TypeError(f"Missing signature for function {name!r}")
+        return_type, params = self._function_sigs[name]
+        if len(args) != len(params):
+            raise TypeError(f"Function {name} expects {len(params)} args, got {len(args)}")
 
-        # Expect pyparsing Function_Definition group: decl + body
-        if not isinstance(fn, pp.ParseResults):
-            raise TypeError(f"Unsupported function object for {name!r}: {type(fn).__name__}")
-
-        # Extract signature and body
-        try:
-            decl = fn.decl
-            body = fn.body
-            return_type = str(decl.return_type) if "return_type" in decl else "int"
-            params = decl.get("parameters")
-            param_list = list(params[0]) if params else []
-        except Exception as exc:
-            raise TypeError(f"Malformed function definition for {name!r}") from exc
-
-        # Arity check
-        if len(args) != len(param_list):
-            raise TypeError(f"Function {name} expects {len(param_list)} args, got {len(args)}")
-
-        # New frame for function locals
         self.push_frame()
         try:
             # Bind parameters in order
-            for (param, value) in zip(param_list, args):
-                # Each param is a group with fields: type, name
-                ptype = str(param.type) if "type" in param else "int"
-                pname = str(param.name) if "name" in param else None
-                if pname is None:
-                    raise TypeError(f"Invalid parameter in function {name}")
-                # Coerce to declared parameter type on declaration
-                self.declare_var(pname, ptype, value)
+            for (ptype, pname), value in zip(params, args):
+                self.declare_var(pname, ptype or "int", value)
 
-            # Execute function body statements until a return
-            stmts = body.stmts if hasattr(body, "stmts") else []
-            for stmt in stmts:
-                if not isinstance(stmt, pp.ParseResults):
-                    continue
-                node = self._build_stmt_node(stmt)
-                if node is None:
-                    continue
-                result = node.execute(self)
-                if isinstance(node, ReturnStmtNode) or result is not None:
-                    return result
-
-            # No explicit return encountered: return default for the declared type
-            return self._default_for(return_type)
+            # Execute body node; catch return propagation
+            return fn.execute(self)
         finally:
             self.pop_frame()
 
@@ -407,31 +370,11 @@ class TinyEngine:
             if isinstance(lhs, (int, float)) or isinstance(rhs, (int, float)):
                 lnum = self._to_number(lhs)
                 rnum = self._to_number(rhs)
-                if op == "<":
-                    return lnum < rnum
-                if op == ">":
-                    return lnum > rnum
-                if op == "=":
-                    return lnum == rnum
-                if op == "<=":
-                    return lnum <= rnum
-                if op == ">=":
-                    return lnum >= rnum
-                return lnum != rnum  # "<>"
+                return _op_map[op](lnum, rnum)
             else:
                 lstr = str(lhs)
                 rstr = str(rhs)
-                if op == "<":
-                    return lstr < rstr
-                if op == ">":
-                    return lstr > rstr
-                if op == "=":
-                    return lstr == rstr
-                if op == "<=":
-                    return lstr <= rstr
-                if op == ">=":
-                    return lstr >= rstr
-                return lstr != rstr
+                return _op_map[op](lstr, rstr)
 
         # Arithmetic ops
         if op in {"+", "-", "*", "/"}:
@@ -441,13 +384,6 @@ class TinyEngine:
             # Numeric operations
             lnum = self._to_number(lhs)
             rnum = self._to_number(rhs)
-            if op == "+":
-                return lnum + rnum
-            if op == "-":
-                return lnum - rnum
-            if op == "*":
-                return lnum * rnum
-            # '/'
-            return lnum / rnum
+            return _op_map[op](lnum, rnum)
 
         raise NotImplementedError(f"Operator not implemented: {op}")
