@@ -20,7 +20,11 @@ are structured using names and Groups to support later processing.
 Grammar definitions are based on the Tiny Language Reference:
 https://github.com/a7medayman6/Tiny-Compiler/blob/master/Language-Description.md
 """
+
 from __future__ import annotations
+
+# disable black reformatting
+# fmt: off
 
 import pyparsing as pp
 
@@ -63,7 +67,9 @@ FunctionName = Identifier
 # Literals
 # Use ppc.number to auto-convert to Python int/float during parsing
 number = ppc.number.set_name("Number")
-string_lit = pp.QuotedString('"', esc_char="\\", unquote_results=True).set_name("String")
+string_lit = pp.QuotedString('"', esc_char="\\", unquote_results=True).set_name(
+    "String"
+)
 
 # Forward declarations
 expr = pp.Forward().set_name("expr")
@@ -83,7 +89,10 @@ function_call = pp.Group(
 
 # Term: number | Identifier | func_call | '(' expr ')'
 term <<= (
-        number | string_lit | function_call | Identifier #| pp.Group(LPAREN + expr + RPAREN)
+    number
+    | string_lit
+    | function_call
+    | Identifier  # | pp.Group(LPAREN + expr + RPAREN)
 ).set_name("term")
 
 # Operators
@@ -132,7 +141,7 @@ var_decl = pp.Group(Identifier("name") + init_opt)
 Declaration_Statement = pp.Group(
     pp.Tag("type", "decl_stmt")
     + Datatype("datatype")
-    + pp.DelimitedList(var_decl, COMMA)("decls")
+    - pp.DelimitedList(var_decl, COMMA)("decls")
     + SEMI
 ).set_name("Declaration_Statement")
 
@@ -173,7 +182,8 @@ If_Statement = pp.Group(
             ELSEIF.suppress()
             - bool_expr("cond")
             + THEN.suppress()
-            + pp.Group(stmt_seq)("then"))
+            + pp.Group(stmt_seq)("then")
+        )
     )("elseif")
     + pp.Optional(ELSE.suppress() - pp.Group(stmt_seq)("else"))
     + END.suppress()
@@ -218,20 +228,26 @@ Param_List = pp.Group(pp.DelimitedList(Parameter, COMMA))
 Function_Declaration = pp.Group(
     Datatype("return_type")
     + FunctionName("name")
-    + LPAREN + pp.Optional(Param_List, default=[])("parameters") + RPAREN
+    + LPAREN
+    - pp.Optional(Param_List, default=[])("parameters")
+    + RPAREN
 ).set_name("Function_Declaration")
-Function_Body = pp.Group(
-    LBRACE + pp.Group(stmt_seq)("stmts") + RBRACE
-).set_name("Function_Body")
+Function_Body = pp.Group(LBRACE + pp.Group(stmt_seq)("stmts") + RBRACE).set_name(
+    "Function_Body"
+)
 Function_Definition = pp.Group(
     pp.Tag("type", "func_decl")
     + Function_Declaration("decl")
-    + Function_Body("body")
+    - Function_Body("body")
 ).set_name("Function_Definition")
 
 Main_Function = pp.Group(
-    pp.Tag("type", "main_decl") +
-    Datatype("return_type") + MAIN.suppress() + LPAREN + RPAREN + Function_Body("body")
+    pp.Tag("type", "main_decl")
+    + Datatype("return_type")
+    + MAIN.suppress()
+    + LPAREN
+    + RPAREN
+    - Function_Body("body")
 )
 
 # Program: {Function_Statement} Main_Function
@@ -239,8 +255,11 @@ Program = pp.Group(
     pp.Group(pp.ZeroOrMore(Function_Definition))("functions") + Main_Function("main")
 )("program").set_name("program")
 
-# Ignore comments globally
+# Ignore comments globally (for full program parsing) and in interactive elements
 Program.ignore(comment)
+stmt_seq.ignore(comment)
+Function_Definition.ignore(comment)
+statement.ignore(comment)
 
 # Optional: generate diagram
 # Program.create_diagram('tiny_parser_diagram.html', show_results_names=True)
@@ -281,7 +300,7 @@ def _mini_tests() -> None:
 
     program_tests = [
         # Function with params and return, and main
-        'int sum(int a, int b){ write a; return a + b; } int main(){ int r; r := sum(2,3); write r; return 0; }',
+        "int sum(int a, int b){ write a; return a + b; } int main(){ int r; r := sum(2,3); write r; return 0; }",
         'int main(){ write "Hello, World!"; return 0; }',
     ]
     Program.run_tests(program_tests, parse_all=True, full_dump=True)
