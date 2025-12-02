@@ -20,7 +20,6 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 import traceback
-from typing import Iterable
 
 import pyparsing as pp
 
@@ -128,7 +127,6 @@ def _load_functions_from_file(
             if fn_node_class is None:
                 continue
             fn_node = fn_node_class.from_parsed(fdef)
-            engine.register_function_signature(fname, return_type, params)
             engine.register_function(fname, fn_node)
 
 
@@ -207,7 +205,7 @@ def handle_meta_command(engine: TinyEngine, cmd: str, debug:list[bool]) -> bool:
                 sigs = engine.get_function_signatures()
                 for name in names:
                     fn_ret_type, fn_params = sigs[name]
-                    print(f"  {fn_ret_type} {name}({', '.join(' '.join(p) for p in fn_params)})")
+                    print(f"  {name}({', '.join(' '.join(p) for p in fn_params)}) : {fn_ret_type}")
 
         if lower in ("list", "list vars"):
             _print_vars()
@@ -351,7 +349,6 @@ def repl() -> int:
                     if fn_node_class is None:
                         raise TypeError(f"Unsupported function node type: {getattr(fdef, 'type', None)!r}")
                     fn_node = fn_node_class.from_parsed(fdef)
-                    engine.register_function_signature(fname, return_type, params)
                     engine.register_function(fname, fn_node)
                 except Exception as exc:
                     if debug:
@@ -365,8 +362,8 @@ def repl() -> int:
 
         # Parsed successfully: execute and reset buffer
         nodes = _build_nodes_from_stmt_seq(parsed)
+        echoed_any = False
         try:
-            echoed_any = False
             for node in nodes:
                 ret = node.execute(engine)
                 stype = getattr(node, "statement_type", None)

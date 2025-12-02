@@ -83,8 +83,12 @@ function_call = pp.Group(
     pp.Tag("type", "func_call")
     + FunctionName("name")
     + LPAREN
-    + pp.Optional(pp.DelimitedList(expr, COMMA))("args")
-    + RPAREN
+    + (
+        # fast evaluation of empty arg list, since it is common, and the recursive expr
+        # parser can be expensive
+        RPAREN
+        | pp.DelimitedList(expr)("args") + RPAREN
+    )
 ).set_name("function_call")
 
 # Term: number | Identifier | func_call | '(' expr ')'
