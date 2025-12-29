@@ -25,6 +25,25 @@ Required Python versions by pyparsing version
 +--------------------------------------------------+-------------------+
 
 
+Version 3.3.2 - in development
+------------------------------
+- Defined pyparsing-specific warning classes so that they can be selectively enabled
+  or disabled without affecting warnings raised by other libraries in the same Python
+  app:
+  - `PyparsingWarning` - base warning for all pyparsing-specific warnings (inherits
+    from `UserWarning`)
+  - `PyparsingDeprecationWarning` - warning for using deprecated features (inherits
+    from `PyparsingWarning` and `DeprecationWarning`)
+  - `PyparsingDiagnosticWarning` - warning raised when pyparsing diagnostics are
+    enabled and a diagnostic feature is used (inherits from `PyparsingWarning`)
+
+
+Version 3.3.1 - December, 2025
+------------------------------
+- Added license info to metadata, following PEP-639. Thanks to Gedalia Pasternak and
+  Marc Mueller for submitted issue and PR. Fixes #626.
+
+
 Version 3.3.0 - December, 2025
 ------------------------------
 ===========================================================================================
@@ -95,6 +114,9 @@ Version 3.3.0 - December, 2025
     execute the benchmark across multiple Python versions (3.9–3.14) and pyparsing versions
     (3.1.1 through 3.3.0), aggregating results into `perf_pyparsing.csv` at the repo root.
   - See `tests/README.md` for usage instructions.
+
+- Used performance benchmarking to identify and revert an inefficient utility method used in
+  `transform_string` (introduced in pyparsing 3.2.0b2).
 
 
 Version 3.2.5 - September, 2025

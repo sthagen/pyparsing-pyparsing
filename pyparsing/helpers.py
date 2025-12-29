@@ -15,11 +15,13 @@ from .util import (
     replaced_by_pep8,
 )
 
+
 def _suppression(expr: Union[ParserElement, str]) -> ParserElement:
     # internal helper to avoid wrapping Suppress inside another Suppress
     if isinstance(expr, Suppress):
         return expr
     return Suppress(expr)
+
 
 #
 # global helpers
@@ -227,6 +229,7 @@ def one_of(
             "warn_on_multiple_string_args_to_oneof:"
             " More than one string argument passed to one_of, pass"
             " choices as a list or space-delimited string",
+            PyparsingDiagnosticWarning,
             stacklevel=2,
         )
 
@@ -291,7 +294,9 @@ def one_of(
 
         except re.error:
             warnings.warn(
-                "Exception creating Regex for one_of, building MatchFirst", stacklevel=2
+                "Exception creating Regex for one_of, building MatchFirst",
+                PyparsingDiagnosticWarning,
+                stacklevel=2,
             )
 
     # last resort, just use MatchFirst of Token class corresponding to caseless
@@ -451,7 +456,7 @@ def locatedExpr(expr: ParserElement) -> ParserElement:
     """
     warnings.warn(
         f"{'locatedExpr'!r} deprecated - use {'Located'!r}",
-        DeprecationWarning,
+        PyparsingDeprecationWarning,
         stacklevel=2,
     )
 
@@ -614,10 +619,14 @@ def nested_expr(
     ret = Forward()
     if ignoreExpr is not None:
         ret <<= Group(
-            _suppression(opener) + ZeroOrMore(ignoreExpr | ret | content) + _suppression(closer)
+            _suppression(opener)
+            + ZeroOrMore(ignoreExpr | ret | content)
+            + _suppression(closer)
         )
     else:
-        ret <<= Group(_suppression(opener) + ZeroOrMore(ret | content) + _suppression(closer))
+        ret <<= Group(
+            _suppression(opener) + ZeroOrMore(ret | content) + _suppression(closer)
+        )
 
     ret.set_name(f"nested {opener}{closer} expression")
 
@@ -1071,7 +1080,7 @@ def indentedBlock(blockStatementExpr, indentStack, indent=True, backup_stacks=[]
     """
     warnings.warn(
         f"{'indentedBlock'!r} deprecated - use {'IndentedBlock'!r}",
-        DeprecationWarning,
+        PyparsingDeprecationWarning,
         stacklevel=2,
     )
 
