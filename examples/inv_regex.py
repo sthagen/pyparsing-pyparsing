@@ -20,6 +20,7 @@ from pyparsing import (
     printables,
     ParserElement,
     Combine,
+    Optional,
     SkipTo,
     infix_notation,
     ParseFatalException,
@@ -209,7 +210,7 @@ def parser():
         re_dot = Literal(".")
         repetition = (
             (lbrace + Word(nums)("count") + rbrace)
-            | (lbrace + Word(nums)("minCount") + "," + Word(nums)("maxCount") + rbrace)
+            | (lbrace + Optional(Word(nums), default=0)("minCount") + "," + Word(nums)("maxCount") + rbrace)
             | one_of(list("*+?"))
         )
 
@@ -244,7 +245,7 @@ def invert(regex):
         for s in invert(r"[A-Z]{3}\d{3}"):
             print s
     """
-    invre = GroupEmitter(parser().parse_string(regex)).make_generator()
+    invre = GroupEmitter(parser().parse_string(regex, parse_all=True)).make_generator()
     return invre()
 
 
