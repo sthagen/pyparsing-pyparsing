@@ -22,7 +22,6 @@ NULL_SLICE: slice = slice(None)
 
 
 class _ParseResultsWithOffset:
-    tup: tuple[ParseResults, int]
     __slots__ = ["tup"]
 
     def __init__(self, p1: ParseResults, p2: int) -> None:
@@ -34,8 +33,8 @@ class _ParseResultsWithOffset:
     def __getstate__(self):
         return self.tup
 
-    def __setstate__(self, *args):
-        self.tup = args[0]
+    def __setstate__(self, state):
+        self.tup = state
 
 
 class ParseResults:
@@ -673,11 +672,13 @@ class ParseResults:
         shared with the copy. Use :meth:`ParseResults.deepcopy` to
         create a copy with its own separate content values.
         """
-        ret = ParseResults(self._toklist)
-        ret._tokdict = self._tokdict.copy()
+        ret: ParseResults = object.__new__(ParseResults)
+        ret._toklist = self._toklist[:]
+        ret._tokdict = {**self._tokdict}
         ret._parent = self._parent
-        ret._all_names |= self._all_names
+        ret._all_names = {*self._all_names}
         ret._name = self._name
+        ret._modal = self._modal
         return ret
 
     def deepcopy(self) -> ParseResults:
