@@ -6570,6 +6570,42 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             print(re_match)
             print(pp_match.value)
 
+    def testLocatedExprLeadingWhitespace(self):
+        # Located should mark the start of the match, not leading whitespace the
+        # wrapped expression skips - including when whitespace skipping is
+        # delegated to sub-expressions (MatchFirst, And). Issue #621.
+        abc = pp.Keyword("abc")
+
+        # a single token already reported the correct location
+        single = pp.Located(abc).parse_string("   abc")
+        self.assertParseResultsEquals(single, [3, ["abc"], 6])
+
+        # a MatchFirst used to report locn_start=0, a "   abc" span
+        match_first = pp.Located(abc | abc).parse_string("   abc")
+        self.assertParseResultsEquals(match_first, [3, ["abc"], 6])
+        self.assertEqual(
+            "abc",
+            "   abc"[match_first.locn_start : match_first.locn_end],
+            "Located(MatchFirst) included leading whitespace in its location",
+        )
+
+        # an And likewise delegates whitespace skipping
+        sample = "   ID PARI12345678"
+        seq = pp.Located(pp.Literal("ID") + pp.Word(pp.alphanums)).parse_string(sample)
+        self.assertEqual(
+            "ID PARI12345678",
+            sample[seq.locn_start : seq.locn_end],
+            "Located(And) included leading whitespace in its location",
+        )
+
+        # leave_whitespace() must keep the leading whitespace
+        leave_ws = pp.Located(pp.Word(" abc").leave_whitespace()).parse_string("   abc")
+        self.assertEqual(
+            0,
+            leave_ws.locn_start,
+            "Located should not skip whitespace for a leave_whitespace expression",
+        )
+
     def testPop(self):
         source = "AAA 123 456 789 234"
         patt = pp.Word(pp.alphas)("name") + pp.Word(pp.nums) * (1,)
@@ -7363,6 +7399,26 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 datetime.datetime(1997, 7, 16, 19, 20, 30, 450000),
                 results[0][1][0],
                 "error in parsing valid iso8601_datetime - incorrect value",
+            )
+
+        with self.subTest("ppc.as_datetime fractional seconds run_tests"):
+            success, results = (
+                ppc.iso8601_datetime()
+                .add_parse_action(ppc.as_datetime)
+                .run_tests(
+                    """
+                1997-07-16T19:20:30.45
+                """
+                )
+            )
+
+            self.assertTrue(success, "error in parsing valid iso8601_datetime")
+            # as_datetime must scale fractional seconds to microseconds, matching
+            # convert_to_datetime above (0.45 s -> 450000 us, not 449 us).
+            self.assertEqual(
+                datetime.datetime(1997, 7, 16, 19, 20, 30, 450000),
+                results[0][1][0],
+                "error in as_datetime fractional seconds - incorrect microseconds",
             )
 
         with self.subTest("ppc.uuid success run_tests"):

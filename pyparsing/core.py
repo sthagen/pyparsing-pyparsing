@@ -5583,7 +5583,11 @@ class Located(ParseElementEnhance):
     """
 
     def parseImpl(self, instring, loc, do_actions=True) -> ParseImplReturnType:
-        start = loc
+        # skip leading whitespace before capturing the start location, so
+        # locn_start marks the start of the match and not preceding whitespace,
+        # even when the wrapped expression delegates whitespace skipping to its
+        # sub-expressions (e.g. And/MatchFirst). Issue #621.
+        start = self.expr.preParse(instring, loc)
         loc, tokens = self.expr._parse(instring, start, do_actions, callPreParse=False)
         ret_tokens = ParseResults([start, tokens, loc])
         ret_tokens["locn_start"] = start
