@@ -29,11 +29,22 @@ Version 3.3.3 - in development
 ------------------------------
 - Adding support for Python 3.15.
 
+- Fixed debug output corruption when a parsed line contains a carriage return or
+  other control character. `set_debug()` printed the source line verbatim, so a
+  stray `\r` returned the terminal cursor to column 0 and overwrote the "Match ...
+  at loc" text. Control characters in the debug line are now shown escaped, and the
+  caret stays aligned with the match location. Issue #496, reported by Matthew Rowles.
+
+- Fixed bugs in `ParseResults.__add__()` and `ParseResults.__radd__()`, where
+  erroneous `AttributeError` or `RecursionError` could be raised when adding
+  `ParseResults` objects to non-`ParseResults` objects, instead of expected
+  `TypeError`. PR submitted by Vincent Gao et AI.
+
 - Fixed `pyparsing_common.as_datetime` parse action incorrectly scaling fractional
   seconds, writing milliseconds into the `datetime` microsecond field (for example
   "1997-07-16T19:20:30.45" produced microsecond 449 instead of 450000). Fractional
   seconds are now scaled to microseconds, matching `convert_to_datetime` and the
-  standard library. PR submitted by gaoflow.
+  standard library. PR submitted by Vincent Gao.
 
 - Fixed matching bug in `match_previous_expr()`, when expression is modified with
   `leave_whitespace(recursive=True)`. Issue #633, reported by Ahmed Mohamed Abdelaal,
