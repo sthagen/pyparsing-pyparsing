@@ -4163,7 +4163,13 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
     def testParseResultsDeepcopy(self):
         expr = (
             pp.Word(pp.nums)
-            + pp.Group(pp.Word(pp.alphas)("key") + "=" + pp.Word(pp.nums)("value"))[...]
+            + pp.Group(
+                pp.Word(pp.alphas)("key")
+                + "="
+                + pp.Group(
+                    pp.Word(pp.nums)
+                )("value")
+            )[...]
         )
         result = expr.parse_string("1 a=100 b=200 c=300")
         orig_elements = result._toklist[:]
@@ -4174,6 +4180,10 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         # check copy and contained results are different from original
         self.assertFalse(r2 is result, "copy failed")
         self.assertFalse(r2[1] is result[1], "deep copy failed")
+
+        # check that the copy's list and dict entries are the same object
+        for i in (1, 2, 3):
+            self.assertTrue(r2[i][2] is r2[i].value)
 
         # check copy and original are equal
         self.assertEqual(result.as_dict(), r2.as_dict())
@@ -4197,12 +4207,12 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             r2,
             expected_list=[
                 "1",
-                ["a", "=", "100"],
-                ["b", "=", "200"],
-                ["c", "=", "300"],
+                ["a", "=", ["100"]],
+                ["b", "=", ["200"]],
+                ["c", "=", ["300"]],
             ],
         )
-        self.assertParseResultsEquals(r2[1], expected_dict={"key": "a", "value": "100"})
+        self.assertParseResultsEquals(r2[1], expected_dict={"key": "a", "value": ["100"]})
 
     def testParseResultsDeepcopy2(self):
         expr = (
@@ -4267,6 +4277,35 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 [("c", "=", "300")],
             ],
         )
+
+    def testParseResultsDeepcopy4(self):
+        # a top-level results name pointing at a mutable sub-ParseResults
+        # (the named token is also the list item) must be deep-copied, so the
+        # copy stays decoupled from the original whether reached by index or
+        # by name
+        expr = pp.Group(pp.Word(pp.nums)("a") + pp.Word(pp.nums)("b"))("grp") + pp.Word(
+            pp.alphas
+        )("w")
+        result = expr.parse_string("1 2 xyz")
+
+        r2 = result.deepcopy()
+
+        # named result and list item must be the same object within the copy,
+        # and both must differ from the original
+        self.assertTrue(r2["grp"] is r2[0], "named result diverged from list item")
+        self.assertFalse(
+            r2["grp"] is result["grp"], "deep copy failed for named result"
+        )
+
+        # mutate the original's named sub-result; the deep copy must not change
+        result["grp"][0] = result["grp"]["a"] = "999"
+
+        self.assertParseResultsEquals(
+            r2,
+            expected_list=[["1", "2"], "xyz"],
+            expected_dict={"grp": {"a": "1", "b": "2"}, "w": "xyz"},
+        )
+        self.assertEqual({"a": "1", "b": "2"}, r2["grp"].as_dict())
 
     def testIgnoreString(self):
         """test ParserElement.ignore() passed a string arg"""
@@ -7485,6 +7524,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 datetime.datetime(1997, 7, 16, 19, 20, 30, 450000),
                 results[0][1][0],
                 "error in as_datetime fractional seconds - incorrect microseconds",
+            )
+
+        with self.subTest(
+            "ppc.as_datetime fractional seconds rounding up carry into next second"
+        ):
+            # A fractional-seconds value that rounds up to a full second (e.g. the
+            # trailing digits of a nanosecond-precision timestamp) must carry into
+            # the next second, not overflow datetime's 0..999999 microsecond arg.
+            parse_dt = ppc.iso8601_datetime().add_parse_action(ppc.as_datetime)
+            self.assertEqual(
+                datetime.datetime(2021, 1, 1, 0, 0, 1),
+                parse_dt.parse_string("2021-01-01T00:00:00.999999999")[0],
+                "as_datetime must carry a rounded-up fractional second, not raise",
+            )
+            self.assertEqual(
+                datetime.datetime(2021, 6, 15, 12, 31, 0),
+                parse_dt.parse_string("2021-06-15T12:30:59.9999995")[0],
+                "as_datetime must carry a rounded-up fractional second across minutes",
             )
 
         with self.subTest(

@@ -29,6 +29,13 @@ Version 3.3.3 - in development
 ------------------------------
 - Adding support for Python 3.15.
 
+- Fixed `pyparsing_common.as_datetime` raising `Invalid date/time: microsecond
+  must be in 0..999999` for valid ISO-8601 timestamps whose fractional seconds
+  round up to a full second (e.g. `2021-06-15T12:30:59.9999995`, common in
+  nanosecond-precision timestamps). The rounded microseconds are now added via
+  `timedelta` so the value carries into the next second instead of overflowing
+  the `datetime` microsecond argument. PR submitted by Andrew Chen et AI.
+
 - Fixed debug output corruption when a parsed line contains a carriage return or
   other control character. `set_debug()` printed the source line verbatim, so a
   stray `\r` returned the terminal cursor to column 0 and overwrote the "Match ...
@@ -55,6 +62,13 @@ Version 3.3.3 - in development
   `MatchFirst` or `And`). The leading whitespace is now skipped before the start
   location is recorded, while `leave_whitespace()` expressions keep their whitespace.
   Issue #621, reported by MeanSquaredError.
+
+- Fixed `ParseResults.deepcopy()` not deep-copying results names that referenced
+  nested `ParseResults`. Only the token list was copied, so a named token still
+  pointed at the original; changing the original (or the copy) was visible through
+  the other when the token was reached by name, and the same token could differ
+  when reached by index versus by name. Results names now reference the
+  deep-copied tokens. PR submitted by Sarath Francis.
 
 - Update type checking to use `mypy 1.20.0`.
 
