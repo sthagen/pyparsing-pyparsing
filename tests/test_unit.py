@@ -2231,6 +2231,32 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseAndCheckList(qs, "*///*", ["/"])
         self.assertParseAndCheckList(qs, "*////*", ["//"])
 
+    def testQuotedStringWithWhitespaceInQuoteChars(self):
+        # Issue #492 - a leading/trailing whitespace character that is part of a
+        # multi-character quote delimiter (such as a newline in "\n;") must not
+        # be stripped away, which previously collapsed the delimiter to ";".
+        with ppt.reset_pyparsing_context():
+            pp.ParserElement.set_default_whitespace_chars("")
+            newline_quote = pp.QuotedString("\n;", multiline=True)
+            self.assertParseAndCheckList(
+                newline_quote, "\n;Hi \n mum!\n;", ["Hi \n mum!"]
+            )
+            self.assertEqual(
+                [["Hi \n mum!"]],
+                newline_quote.search_string("lsjdf \n;Hi \n mum!\n; sldjf").as_list(),
+            )
+            self.assertEqual(
+                [["Hi \n m;um!"]],
+                newline_quote.search_string("lsjdf \n;Hi \n m;um!\n; sldjf").as_list(),
+            )
+
+        # a fully whitespace (or empty) quote_char is still rejected
+        for bad_quote in ("", "   ", "\n"):
+            with self.assertRaises(ValueError):
+                pp.QuotedString(bad_quote)
+            with self.assertRaises(ValueError):
+                pp.QuotedString('"', end_quote_char=bad_quote)
+
     def testRepeater(self):
         if ParserElement._packratEnabled or ParserElement._left_recursion_enabled:
             print("skipping this test, not compatible with memoization")
@@ -3827,6 +3853,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         )
         self.assertEqual(["m", "n"], list(reduced))
 
+        # ParseResults += non-ParseResults -> TypeError (was AttributeError),
+        # mirroring the __add__ contract above.
+        pr_iadd = pp.ParseResults(["a", "b"])
+        with self.assertRaises(
+            TypeError,
+            msg="ParseResults += int should raise TypeError, not AttributeError",
+        ):
+            pr_iadd += 1
+        with self.assertRaises(
+            TypeError,
+            msg="ParseResults += list should raise TypeError, not AttributeError",
+        ):
+            pr_iadd += ["extra"]
+
+        # ParseResults += ParseResults still works
+        pr_iadd += pp.ParseResults(["c"])
+        self.assertEqual(["a", "b", "c"], list(pr_iadd))
+
     def testParseResultsClear(self):
         """test simple case of ParseResults.clear()"""
 
@@ -4159,6 +4203,26 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         self.assertParseResultsEquals(
             r2[1], expected_dict={"key": "q", "value": "100", "xyz": 1000}
         )
+
+    def testParseResultsCopyResultsNamesAreIndependent(self):
+        # copy() shares the contained results, but renumbering the offsets of
+        # one must not renumber the other's: insert/pop/del shift the recorded
+        # positions, and a shared list would shift them for both.
+        expr = pp.Word(pp.nums) + pp.Word(pp.nums)("b")
+
+        # mutating the copy must not disturb the original's names
+        result = expr.parse_string("1 2")
+        r2 = result.copy()
+        r2.insert(0, "X")
+        del result[0]
+        self.assertEqual("b", result.get_name())
+
+        # ...and the other way round
+        result = expr.parse_string("1 2")
+        r2 = result.copy()
+        result.insert(0, "X")
+        del r2[0]
+        self.assertEqual("b", r2.get_name())
 
     def testParseResultsDeepcopy(self):
         expr = (
@@ -5937,6 +6001,24 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                     expr + pp.rest_of_line.suppress(),
                     "A1234567890",
                     ["A1234567890"[:exarg]],
+                )
+
+    def testWordMaxIndependentOfWhitespaceInCharset(self):
+        # A Word constructed with an explicit `max` uses an internal regex
+        # fast-path only when its character set contains no space; otherwise
+        # it falls back to the char-by-char parseImpl. Both paths must agree:
+        # `max` means "match at most `max` characters, leaving the remainder"
+        # (see testWordMinMaxExactArgs and the "W:(0-9){1,3}" repr contract).
+        for extra, path in [("", "regex fast-path"), (" ", "char-by-char path")]:
+            with self.subTest(charset_extra=repr(extra), path=path):
+                expr = pp.Word(pp.nums + extra, max=3)("field") + pp.Word(pp.nums)(
+                    "rest"
+                )
+                self.assertParseAndCheckDict(
+                    expr,
+                    "0123456",
+                    {"field": "012", "rest": "3456"},
+                    "Failed to parse regex and non-regex parse_impl in Word consistently"
                 )
 
     def testWordMin(self):

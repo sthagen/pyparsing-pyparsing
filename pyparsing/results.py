@@ -202,7 +202,7 @@ class ParseResults:
         asList = deprecate_argument(kwargs, "asList", True, new_name="aslist")
 
         asList = asList and aslist
-        self._tokdict: dict[str, _ParseResultsWithOffset]
+        self._tokdict: dict[str, list[_ParseResultsWithOffset]]
         self._modal = modal
 
         if name is None or name == "":
@@ -248,16 +248,23 @@ class ParseResults:
         return ParseResults([v.result for v in self._tokdict[i]])
 
     def __setitem__(self, k, v, isinstance=isinstance):
+        no_value = object()
         if isinstance(v, _ParseResultsWithOffset):
-            self._tokdict[k] = self._tokdict.get(k, list()) + [v]
+            cur_tokdict_value = self._tokdict.get(k, no_value)
+            if cur_tokdict_value is no_value:
+                self._tokdict[k] = [v]
+            else:
+                cur_tokdict_value.append(v)
             sub = v.result
         elif isinstance(k, (int, slice)):
             self._toklist[k] = v
             sub = v
         else:
-            self._tokdict[k] = self._tokdict.get(k, []) + [
-                _ParseResultsWithOffset(v, 0)
-            ]
+            cur_tokdict_value = self._tokdict.get(k, no_value)
+            if cur_tokdict_value is no_value:
+                self._tokdict[k] = [_ParseResultsWithOffset(v, 0)]
+            else:
+                cur_tokdict_value.append(_ParseResultsWithOffset(v, 0))
             sub = v
         if isinstance(sub, ParseResults):
             sub._parent = self
@@ -283,12 +290,15 @@ class ParseResults:
         # get removed indices
         removed = list(range(*i.indices(mylen)))
         removed.reverse()
-        # fixup indices in token dictionary
-        for occurrences in self._tokdict.values():
+        # fixup indices in token dictionary; copy() shares these lists, so
+        # renumber a private copy rather than the list itself
+        for name, occurrences in self._tokdict.items():
+            occurrences = occurrences[:]
             for j in removed:
                 for k, (value, position) in enumerate(occurrences):
                     if position > j:
                         occurrences[k] = _ParseResultsWithOffset(value, position - 1)
+            self._tokdict[name] = occurrences
 
     def __contains__(self, k) -> bool:
         return k in self._tokdict
@@ -436,11 +446,14 @@ class ParseResults:
 
         """
         self._toklist.insert(index, ins_string)
-        # fixup indices in token dictionary
-        for occurrences in self._tokdict.values():
+        # fixup indices in token dictionary; copy() shares these lists, so
+        # renumber a private copy rather than the list itself
+        for name, occurrences in self._tokdict.items():
+            occurrences = occurrences[:]
             for k, (value, position) in enumerate(occurrences):
                 if position > index:
                     occurrences[k] = _ParseResultsWithOffset(value, position + 1)
+            self._tokdict[name] = occurrences
 
     def append(self, item):
         """
@@ -519,6 +532,8 @@ class ParseResults:
         return ret
 
     def __iadd__(self, other: ParseResults) -> ParseResults:
+        if not isinstance(other, ParseResults):
+            return NotImplemented
         if not other:
             return self
 
@@ -669,6 +684,9 @@ class ParseResults:
         """
         ret: ParseResults = object.__new__(ParseResults)
         ret._toklist = self._toklist[:]
+        # the occurrence lists are shared with the original; the only methods
+        # that renumber them (__delitem__, insert) copy before writing, so a
+        # copy can never renumber the original's offsets
         ret._tokdict = {**self._tokdict}
         ret._parent = self._parent
         ret._all_names = {*self._all_names}

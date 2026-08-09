@@ -3365,8 +3365,6 @@ class Word(Token):
         throw_exception = False
         if loc - start < self.minLen:
             throw_exception = True
-        elif self.maxSpecified and loc < instrlen and instring[loc] in body_chars:
-            throw_exception = True
         elif self.asKeyword and (
             (start > 0 and instring[start - 1] in body_chars)
             or (loc < instrlen and instring[loc] in body_chars)
@@ -3715,17 +3713,16 @@ class QuotedString(Token):
         )
         quote_char = quoteChar or quote_char
 
-        # remove white space from quote chars
-        quote_char = quote_char.strip()
-        if not quote_char:
+        # reject empty or whitespace-only quote chars, but preserve any
+        # whitespace that is part of a valid quote delimiter (e.g. a leading
+        # newline in a multiline quote such as "\n;")
+        if not quote_char.strip():
             raise ValueError("quote_char cannot be the empty string")
 
         if end_quote_char is None:
             end_quote_char = quote_char
-        else:
-            end_quote_char = end_quote_char.strip()
-            if not end_quote_char:
-                raise ValueError("end_quote_char cannot be the empty string")
+        elif not end_quote_char.strip():
+            raise ValueError("end_quote_char cannot be the empty string")
 
         self.quote_char: str = quote_char
         self.quote_char_len: int = len(quote_char)
@@ -6912,19 +6909,19 @@ def autoname_elements() -> None:
             var.set_name(name)
 
 
-dbl_quoted_string = Combine(
-    Regex(r'"(?:[^"\n\r\\]|(?:"")|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*') + '"'
+dbl_quoted_string = (
+    Regex(r'"(?:[^"\n\r\\]|(?:"")|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*"')
 ).set_name("string enclosed in double quotes")
 
-sgl_quoted_string = Combine(
-    Regex(r"'(?:[^'\n\r\\]|(?:'')|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*") + "'"
+sgl_quoted_string = Regex(
+    r"'(?:[^'\n\r\\]|(?:'')|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*'"
 ).set_name("string enclosed in single quotes")
 
 quoted_string = Combine(
-    (Regex(r'"(?:[^"\n\r\\]|(?:"")|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*') + '"').set_name(
+    Regex(r'"(?:[^"\n\r\\]|(?:"")|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*"').set_name(
         "double quoted string"
     )
-    | (Regex(r"'(?:[^'\n\r\\]|(?:'')|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*") + "'").set_name(
+    | Regex(r"'(?:[^'\n\r\\]|(?:'')|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*'").set_name(
         "single quoted string"
     )
 ).set_name("quoted string using single or double quotes")
@@ -6932,16 +6929,16 @@ quoted_string = Combine(
 # XXX: Is there some way to make this show up in API docs?
 # .. versionadded:: 3.1.0
 python_quoted_string = Combine(
-    (Regex(r'"""(?:[^"\\]|""(?!")|"(?!"")|\\.)*', flags=re.MULTILINE) + '"""').set_name(
+    Regex(r'"""(?:[^"\\]|""(?!")|"(?!"")|\\.)*"""', flags=re.MULTILINE).set_name(
         "multiline double quoted string"
     )
-    ^ (
-        Regex(r"'''(?:[^'\\]|''(?!')|'(?!'')|\\.)*", flags=re.MULTILINE) + "'''"
-    ).set_name("multiline single quoted string")
-    ^ (Regex(r'"(?:[^"\n\r\\]|(?:\\")|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*') + '"').set_name(
+    ^ Regex(r"'''(?:[^'\\]|''(?!')|'(?!'')|\\.)*'''", flags=re.MULTILINE).set_name(
+        "multiline single quoted string"
+    )
+    ^ Regex(r'"(?:[^"\n\r\\]|(?:\\")|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*"').set_name(
         "double quoted string"
     )
-    ^ (Regex(r"'(?:[^'\n\r\\]|(?:\\')|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*") + "'").set_name(
+    ^ Regex(r"'(?:[^'\n\r\\]|(?:\\')|(?:\\(?:[^x]|x[0-9a-fA-F]+)))*'").set_name(
         "single quoted string"
     )
 ).set_name("Python quoted string")
