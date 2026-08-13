@@ -86,21 +86,6 @@ class resetting:
                 delattr(self.ob, attr)
 
 
-def find_all_re_matches(patt, s):
-    ret = []
-    start = 0
-    if isinstance(patt, str):
-        patt = re.compile(patt)
-    while True:
-        found = patt.search(s, pos=start)
-        if found:
-            ret.append(found)
-            start = found.end()
-        else:
-            break
-    return ret
-
-
 def current_method_name(level=2):
     import traceback
 
@@ -159,6 +144,15 @@ class TestCase(unittest.TestCase):
             finally:
                 warnings.simplefilter("default")
 
+    @contextlib.contextmanager
+    def resetting_recursion_limit(self):
+        """Reset the recursion limit to its original value after
+         the context manager exits."""
+        orig_recursion_limit = sys.getrecursionlimit()
+        try:
+            yield
+        finally:
+            sys.setrecursionlimit(orig_recursion_limit)
 
 class Test01_PyparsingTestInit(TestCase):
     def runTest(self):
@@ -3090,6 +3084,18 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 f"Error pickling ParseResults object (protocol={protocol})",
             )
 
+            # check all internal attributes
+            for attr in pp.ParseResults.__slots__:
+                # can't pickle/unpickle parent reference
+                if attr == "_parent":
+                    continue
+                self.assertEqual(
+                    getattr(result, attr),
+                    getattr(newresult, attr),
+                    f"Mismatch in ParseResults.{attr}"
+                )
+
+
     def testParseResultsPickle2(self):
         import pickle
 
@@ -3514,6 +3520,65 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                     "2",
                     "3",
                 )
+
+    def testBoundedRepetitionLargeUpperBound(self):
+        """issue #332 - expr[..., upper_bound] (and expr * (0, upper_bound))
+        with a large upper_bound must not raise RecursionError during
+        construction or parsing.
+        """
+        # Lower the recursion limit so a deeply nested implementation would
+        # fail deterministically, instead of depending on the host's default.
+        with self.resetting_recursion_limit():
+            sys.setrecursionlimit(300)
+            # both the [...] shorthand and the explicit *(0, n) form
+            expr_shorthand = pp.Literal("A")[..., 1000]
+            expr_tuple = pp.Word(pp.nums) * (0, 1000)
+
+            # check for recursion during parsing
+            expr_shorthand.parse_string("A " * 1000)
+
+        # construction must succeed
+        self.assertIsNotNone(expr_shorthand)
+        self.assertIsNotNone(expr_tuple)
+
+        # parsing a small input must succeed and yield the matched tokens
+        test_string = "A A A A A"
+        expected_list = test_string.split()
+        self.assertParseAndCheckList(
+            expr_shorthand, test_string, expected_list
+        )
+
+        # the upper bound is still enforced (only 3 words allowed before num)
+        with self.assertRaisesParseException():
+            (pp.Word(pp.alphas)[..., 3] + pp.Word(pp.nums)).parse_string("a b c d 1")
+
+    def testBoundedRepetitionLargeUpperBoundEarlyExit(self):
+        """issue #332 - the optional tail of ``expr[..., upper_bound]`` must
+        still *exit early* (like the original recursive implementation): once
+        the repeated expression can no longer match, parsing must stop instead
+        of attempting it for every remaining slot in the upper bound.
+
+        This guards against a regression where the tail was flattened into a
+        list of independent ``Optional`` expressions, which always tried to
+        match the repeated expression for all ``upper_bound`` slots.
+        """
+        def count_fails(*args):
+            count_fails.fail_counter += 1
+        count_fails.fail_counter = 0
+
+        A_expr = pp.Literal("A").set_fail_action(count_fails)
+        expr = A_expr[..., 1000]
+
+        # input has a single match, so a correct early-exit implementation
+        # must fail the repeated expression only once -- not
+        # once per slot in the (large) upper bound.
+        expr.parse_string("A")
+        self.assertEqual(
+            count_fails.fail_counter,
+            1,
+            "bounded repetition did not exit early; it attempted the"
+            f" repeated expression {count_fails.fail_counter} times for a single match",
+        )
 
     def testParserElementMulByZero(self):
         alpwd = pp.Word(pp.alphas)
@@ -5504,6 +5569,51 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             "DEF", res[-1], "updated list, should have updated named attributes only"
         )
 
+        # delete a slice (modifies list, leaves dict intact)
+        del res[:-1]
+        self.assertEqual(res.as_list(), ["DEF"])
+        self.assertEqual(res.as_dict(), {"ints": ["123", "456"]})
+
+    def test_delitem_slices(self):
+        results = pp.Char(pp.alphas)("char*")[...].parse_string(pp.alphas[:10])
+        chars_list = list(pp.alphas[:10])
+        self.assertEqual(results.as_list(), chars_list)
+        print(results.char)
+        self.assertEqual(results.char.as_list(), chars_list)
+
+        del results[::2]
+        print(results.as_list())
+        self.assertEqual(results.as_list(), chars_list[1::2])
+        print(results.char)
+        self.assertEqual(results.char.as_list(), chars_list)
+
+        del results[:]
+        print(results.as_list())
+        self.assertEqual(results.as_list(), [])
+        self.assertEqual(results.char.as_list(), chars_list)
+
+    def test_delitem_slices_copy(self):
+        results = pp.Char(pp.alphas)("char*")[...].parse_string(pp.alphas[:10])
+        chars_list = list(pp.alphas[:10])
+        self.assertEqual(results.as_list(), chars_list)
+        print(results.char)
+        self.assertEqual(results.char.as_list(), chars_list)
+
+        res2 = results.copy()
+
+        del results[::2]
+        print(results.as_list())
+        self.assertEqual(results.as_list(), chars_list[1::2])
+        self.assertEqual(res2.as_list(), chars_list)
+        print(results.char)
+        self.assertEqual(results.char.as_list(), chars_list)
+
+        del results[:]
+        print(results.as_list())
+        self.assertEqual(results.as_list(), [])
+        self.assertEqual(res2.as_list(), chars_list)
+        self.assertEqual(results.char.as_list(), chars_list)
+
     def testWithAttributeParseAction(self):
         """
         This unit test checks with_attribute in these ways:
@@ -6748,7 +6858,7 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
         wd = pp.Word(pp.alphas)
         test_string = "ljsdf123lksdjjf123lkkjj1222"
         pp_matches = pp.Located(wd).search_string(test_string)
-        re_matches = find_all_re_matches("[a-z]+", test_string)
+        re_matches = re.finditer("[a-z]+", test_string)
         for pp_match, re_match in zip(pp_matches, re_matches):
             self.assertParseResultsEquals(
                 pp_match, [re_match.start(), [re_match.group(0)], re_match.end()]
@@ -7210,6 +7320,63 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
                 test.split(),
                 f"Did not successfully stop on ending expression {ender!r}",
             )
+
+    def testOneOrMoreMax(self):
+        # Test OneOrMore with max
+        expr = pp.OneOrMore(pp.Word(pp.nums), max=3)
+
+        # Should match 1, 2, or 3
+        self.assertEqual(len(expr.parse_string("1")), 1)
+        self.assertEqual(len(expr.parse_string("1 2")), 2)
+        self.assertEqual(len(expr.parse_string("1 2 3")), 3)
+
+        # Should match ONLY 3 and leave the rest
+        res = expr.parse_string("1 2 3 4 5")
+        self.assertEqual(len(res), 3)
+        self.assertEqual(res.as_list(), ["1", "2", "3"])
+
+        # Test max=1
+        expr = pp.OneOrMore(pp.Word(pp.nums), max=1)
+        res = expr.parse_string("1 2 3")
+        self.assertEqual(len(res), 1)
+
+        # Test max=0 (should raise ValueError)
+        with self.assertRaises(ValueError):
+            pp.OneOrMore(pp.Word(pp.nums), max=0)
+
+    def testZeroOrMoreMax(self):
+        # Test ZeroOrMore with max
+        expr = pp.ZeroOrMore(pp.Word(pp.nums), max=3)
+
+        # Should match 0, 1, 2, or 3
+        self.assertEqual(len(expr.parse_string("")), 0)
+        self.assertEqual(len(expr.parse_string("1")), 1)
+        self.assertEqual(len(expr.parse_string("1 2")), 2)
+        self.assertEqual(len(expr.parse_string("1 2 3")), 3)
+
+        # Should match ONLY 3 and leave the rest
+        res = expr.parse_string("1 2 3 4 5")
+        self.assertEqual(len(res), 3)
+        self.assertEqual(res.as_list(), ["1", "2", "3"])
+
+        # Test max=1
+        expr = pp.ZeroOrMore(pp.Word(pp.nums), max=1)
+        res = expr.parse_string("1 2 3")
+        self.assertEqual(len(res), 1)
+
+        # Test max=0 (should raise ValueError)
+        with self.assertRaises(ValueError):
+            pp.ZeroOrMore(pp.Word(pp.nums), max=0)
+
+    def testOneOrMoreMaxNegative(self):
+        # If max is negative, OneOrMore should raise ValueError
+        with self.assertRaises(ValueError):
+            pp.OneOrMore(pp.Word(pp.nums), max=-1)
+
+    def testZeroOrMoreMaxNegative(self):
+        # If max is negative, ZeroOrMore should raise ValueError
+        with self.assertRaises(ValueError):
+            pp.ZeroOrMore(pp.Word(pp.nums), max=-1)
 
     def testNestedAsDict(self):
         equals = pp.Literal("=").suppress()
@@ -9499,6 +9666,20 @@ class Test02_WithoutPackrat(ppt.TestParseResultsAsserts, TestCase):
             print(pp.ParseException.explain(pe))
         else:
             self.fail("failed to raise exception when matching empty string")
+
+    def testEmptyDictReturnsDictWhenCallingAsDict(self):
+        parser1 = pp.Dict(pp.ZeroOrMore(pp.Group(pp.Word(pp.alphas) + pp.Word(pp.alphas))))
+        parser2 = parser1.copy()('fubar')
+
+        p1_result = parser1.parse_string('foo bar').as_dict()  # {'foo': 'bar'}  ✓
+        p2_result = parser2.parse_string('foo bar').as_dict()  # {'fubar': {'foo': 'bar'}}  ✓
+        self.assertEqual({"foo": "bar"}, p1_result)
+        self.assertEqual({"fubar": {"foo": "bar"}}, p2_result)
+
+        p1_result = parser1.parse_string('').as_dict()  # {}  ✓
+        p2_result = parser2.parse_string('').as_dict()  # {'fubar': []}  ✗  should be {'fubar': {}}
+        self.assertEqual({}, p1_result)
+        self.assertEqual({"fubar": {}}, p2_result)
 
     def testExplainException(self):
         expr = pp.Word(pp.nums).set_name("int") + pp.Word(pp.alphas).set_name("word")

@@ -83,17 +83,17 @@ class ParseResults:
     _name: str
     _parent: ParseResults
     _all_names: set[str]
-    _modal: bool
     _toklist: list[Any]
-    _tokdict: dict[str, Any]
+    _tokdict: dict[str, list[_ParseResultsWithOffset]]
+    _is_dict_context: bool
 
     __slots__ = (
         "_name",
         "_parent",
         "_all_names",
-        "_modal",
         "_toklist",
         "_tokdict",
+        "_is_dict_context",
     )
 
     class List(list):
@@ -174,6 +174,7 @@ class ParseResults:
         self._name = None
         self._parent = None
         self._all_names = set()
+        self._is_dict_context = False
 
         if toklist is None:
             self._toklist = []
@@ -203,7 +204,6 @@ class ParseResults:
 
         asList = asList and aslist
         self._tokdict: dict[str, list[_ParseResultsWithOffset]]
-        self._modal = modal
 
         if name is None or name == "":
             return
@@ -237,6 +237,14 @@ class ParseResults:
                 self[name] = toklist
             else:
                 self._name = name
+
+    def __eq__(self, other):
+        return (self is other) or (
+            isinstance(other, type(self))
+            and self._name == other._name
+            and self.as_list() == other.as_list()
+            and self.as_dict() == other.as_dict()
+        )
 
     def __getitem__(self, i):
         if isinstance(i, (int, slice)):
@@ -295,9 +303,13 @@ class ParseResults:
         for name, occurrences in self._tokdict.items():
             occurrences = occurrences[:]
             for j in removed:
-                for k, (value, position) in enumerate(occurrences):
+                for k, (value, position) in enumerate(reversed(occurrences)):
                     if position > j:
-                        occurrences[k] = _ParseResultsWithOffset(value, position - 1)
+                        occurrences[len(occurrences) - 1 - k] = _ParseResultsWithOffset(
+                            value, position - 1
+                        )
+                    else:
+                        break
             self._tokdict[name] = occurrences
 
     def __contains__(self, k) -> bool:
@@ -527,6 +539,9 @@ class ParseResults:
     def __add__(self, other: ParseResults) -> ParseResults:
         if not isinstance(other, ParseResults):
             return NotImplemented
+        if not other:
+            return self
+
         ret = self.copy()
         ret += other
         return ret
@@ -669,7 +684,9 @@ class ParseResults:
 
         def to_item(obj):
             if isinstance(obj, ParseResults):
-                return obj.as_dict() if obj.haskeys() else [to_item(v) for v in obj]
+                if obj.haskeys() or obj._is_dict_context:
+                    return obj.as_dict()
+                return [to_item(v) for v in obj]
             else:
                 return obj
 
@@ -691,7 +708,6 @@ class ParseResults:
         ret._parent = self._parent
         ret._all_names = {*self._all_names}
         ret._name = self._name
-        ret._modal = self._modal
         return ret
 
     def deepcopy(self) -> ParseResults:
@@ -904,13 +920,20 @@ class ParseResults:
             (
                 self._tokdict.copy(),
                 None,
-                self._all_names,
+                list(self._all_names),
                 self._name,
+                self._is_dict_context,
             ),
         )
 
     def __setstate__(self, state):
-        self._toklist, (self._tokdict, par, inAccumNames, self._name) = state
+        self._toklist, (
+            self._tokdict,
+            _,
+            inAccumNames,
+            self._name,
+            self._is_dict_context,
+        ) = state
         self._all_names = set(inAccumNames)
         self._parent = None
 
